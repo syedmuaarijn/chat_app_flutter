@@ -160,9 +160,82 @@ class ChatService {
     try {
       final data = await _supabaseClient
           .from('messages')
-          .select('*, profiles:sender_id(username, avatar_url)');
+          .select('*, profiles:sender_id(username, avatar_url)')
+          .eq('conversation_id', conversationId)
+          .order('created_at', ascending: true);
+      return (data as List).map((json) {
+        final message = MessageModel.fromJson(json);
+        if (json['profiles'] != null) {
+          message.senderUsername = json['profiles']['username'];
+          message.senderAvatarUrl = json['profiles']['avatar_url'];
+        }
+        return message;
+      }).toList();
     } catch (e) {
       throw Exception('Failed to get messages: $e');
     }
+  }
+
+  Future<MessageModel> sendMessage(
+    String conversationId,
+    String content,
+  ) async {
+    try {
+      final currentUser = currentUserId;
+      if (currentUser == null) {
+        throw Exception('No user Logged in');
+      }
+      final data = await _supabaseClient
+          .from('messages')
+          .insert({
+            'conversation_id': conversationId,
+            'sender_id': currentUser,
+            'content': content,
+          })
+          .select()
+          .single();
+
+      return MessageModel.fromJson(data);
+    } catch (e) {
+      throw Exception('Failed to send message: $e');
+    }
+  }
+
+  Future<void> markMessagesAsRead(String conversationId) async {
+    try {
+      final currentUser = currentUserId;
+      if (currentUser == null) {
+        throw Exception('No user Logged in');
+      }
+      await _supabaseClient
+          .from('messages')
+          .update({'is_read': true})
+          .eq('conversation_id', conversationId)
+          .neq('sender_id', currentUser)
+          .eq('is_read', false);
+    } catch (e) {
+      throw Exception('Failed to mark messages as read: $e');
+    }
+  }
+
+  Stream<MessageModel> listenToMessages(String conversationId) {
+    return _supabaseClient
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .eq('conversation_id', conversationId)
+        .order('created_at')
+        .map((data) => data.map((json) => MessageModel.fromJson(json)).toList())
+        .expand((messages) => messages);
+  }
+
+  Stream<List<Map<String, dynamic>>> listenToConversations() {
+    final currentUser = currentUserId;
+    if (currentUser == null) {
+      const Stream.empty();
+    }
+    return _supabaseClient
+        .from('conversations')
+        .stream(primaryKey: ['id'])
+        .order('updated_at', ascending: false);
   }
 }
