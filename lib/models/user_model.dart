@@ -20,12 +20,16 @@ class UserModel {
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
       id: json['id'] as String,
-      username: json['username'] as String,
-      fullName: json['full_name'] as String,
-      avatarUrl: json['avatar_url'] as String,
-      bio: json['bio'] as String,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
+      username: (json['username'] as String?) ?? '',
+      fullName: (json['full_name'] as String?) ?? '',
+      avatarUrl: (json['avatar_url'] as String?) ?? '',
+      bio: (json['bio'] as String?) ?? '',
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] as String)
+          : DateTime.now(),
     );
   }
 
@@ -63,7 +67,7 @@ class UserModel {
 
   @override
   String toString() {
-    return 'UserModel(id: $id, username: $username, fullName:$fullName)';
+    return 'UserModel(id: $id, username: $username, fullName: $fullName)';
   }
 
   @override

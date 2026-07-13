@@ -28,11 +28,15 @@ class MessageModel {
       conversationId: json['conversation_id'] as String,
       senderId: json['sender_id'] as String,
       content: json['content'] as String,
-      isRead: json['isRead'] as bool,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
-      senderUsername: json['sender_username'] as String,
-      senderAvatarUrl: json['sender_avatar_url'] as String,
+      isRead: (json['is_read'] as bool?) ?? false,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] as String)
+          : DateTime.now(),
+      senderUsername: json['sender_username'] as String?,
+      senderAvatarUrl: json['sender_avatar_url'] as String?,
     );
   }
 
@@ -62,11 +66,11 @@ class MessageModel {
     return MessageModel(
       id: id ?? this.id,
       conversationId: conversationId ?? this.conversationId,
-      senderId: senderId ?? this.conversationId,
+      senderId: senderId ?? this.senderId,
       content: content ?? this.content,
       isRead: isRead ?? this.isRead,
       createdAt: createdAt ?? this.createdAt,
-      updatedAt: updatedAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       senderUsername: senderUsername ?? this.senderUsername,
       senderAvatarUrl: senderAvatarUrl ?? this.senderAvatarUrl,
     );
@@ -74,7 +78,8 @@ class MessageModel {
 
   @override
   String toString() {
-    return 'MessageModel(id: $id, senderId: $senderId, content: ${content.substring(0, content.length > 20 ? 20 : content.length)}...)';
+    final preview = content.length > 20 ? content.substring(0, 20) : content;
+    return 'MessageModel(id: $id, senderId: $senderId, content: $preview...)';
   }
 
   @override

@@ -115,7 +115,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
+                          color: Colors.black.withValues(alpha: 0.03),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         ),
@@ -162,7 +162,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       borderRadius: BorderRadius.circular(25),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
+                          color: Colors.black.withValues(alpha: 0.05),
                           blurRadius: 5,
                         ),
                       ],

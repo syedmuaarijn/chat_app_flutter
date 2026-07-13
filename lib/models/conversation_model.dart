@@ -22,15 +22,14 @@ class ConversationModel {
   factory ConversationModel.fromJson(Map<String, dynamic> json) {
     return ConversationModel(
       id: json['id'] as String,
-      createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: DateTime.parse(json['updated_at'] as String),
-      unreadCount: json['unread_count'] as int? ?? 0,
-      // otherUser: json['other_user'] != null
-      //     ? UserModel.fromJson(json['other_user'] as Map<String, dynamic>)
-      //     : null,
-      // lastMessage: json['last_message'] != null
-      //     ? MessageModel.fromJson(json['last_message'] as Map<String, dynamic>)
-      //     : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
+      // updated_at may be null until the first message is sent
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] as String)
+          : null,
+      unreadCount: (json['unread_count'] as int?) ?? 0,
     );
   }
 
@@ -62,7 +61,7 @@ class ConversationModel {
 
   @override
   String toString() {
-    return 'ConversationModel(id: $id, otherUser: ${otherUser?.username}, lastMessage:${lastMessage?.content})';
+    return 'ConversationModel(id: $id, otherUser: ${otherUser?.username}, lastMessage: ${lastMessage?.content})';
   }
 
   @override

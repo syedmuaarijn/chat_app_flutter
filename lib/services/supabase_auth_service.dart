@@ -63,10 +63,26 @@ class SupabaseAuthService {
       if (response.user == null) {
         throw Exception('Signup failed');
       }
+
+      final userId = response.user!.id;
+      final now = DateTime.now().toIso8601String();
+
+      // Upsert the profile row in case the DB trigger hasn't created it yet.
+      // If it already exists this is a no-op.
+      await _supabaseClient.from('profiles').upsert({
+        'id': userId,
+        'username': username,
+        'full_name': fullName ?? '',
+        'avatar_url': '',
+        'bio': '',
+        'created_at': now,
+        'updated_at': now,
+      });
+
       final profileData = await _supabaseClient
           .from('profiles')
           .select()
-          .eq('id', response.user!.id)
+          .eq('id', userId)
           .single();
 
       return UserModel.fromJson(profileData);
@@ -127,11 +143,12 @@ class SupabaseAuthService {
       if (userId == null) {
         throw Exception('No authenticated user');
       }
+      // ignore: use_null_aware_elements
       final updates = {
-        if (username != null) 'username': username,
-        if (fullName != null) 'full_name': fullName,
-        if (bio != null) 'bio': bio,
-        if (avatarUrl != null) 'avatar_url': avatarUrl,
+        if (username != null) 'username': username, // ignore: use_null_aware_elements
+        if (fullName != null) 'full_name': fullName, // ignore: use_null_aware_elements
+        if (bio != null) 'bio': bio, // ignore: use_null_aware_elements
+        if (avatarUrl != null) 'avatar_url': avatarUrl, // ignore: use_null_aware_elements
         'updated_at': DateTime.now().toIso8601String(),
       };
 
@@ -144,6 +161,18 @@ class SupabaseAuthService {
       return UserModel.fromJson(profileData);
     } catch (e) {
       throw Exception('Failed to update Profile: $e');
+    }
+  }
+
+  Future<void> updateUserPassword(String newPassword) async {
+    try {
+      await _supabaseClient.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+    } on AuthException catch (e) {
+      throw Exception('Failed to update password: ${e.message}');
+    } catch (e) {
+      throw Exception('Failed to update password: $e');
     }
   }
 

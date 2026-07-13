@@ -1,221 +1,293 @@
-import 'package:chat_app_flutter/services/supabase_auth_service.dart';
-import 'package:flutter/material.dart';
+import 'package:chat_app_flutter/providers/auth_provider.dart';
 import 'package:email_validator/email_validator.dart';
-import '../services/firebase_auth_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class SignupScreen extends StatefulWidget {
+  const SignupScreen({super.key});
+
   @override
-  State<StatefulWidget> createState() => _SignupScreenState();
+  State<SignupScreen> createState() => _SignupScreenState();
 }
 
 class _SignupScreenState extends State<SignupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
-  bool _obscureText1 = true;
-  bool _obscureText2 = true;
-  final _firebaseAuthService = FirebaseAuthService();
-  final _supabaseAuthService = SupabaseAuthService();
+  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _fullNameController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
-  final passwordRegex = RegExp(
+  static final _passwordRegex = RegExp(
     r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&#]{8,}$',
   );
 
-  Future<void> handleFirebaseSignUp() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        User? user = await _firebaseAuthService.signUpWithEmailAndPassword(
-          _emailController.text,
-          _passwordController.text,
-        );
-        if (user != null) {
-          Navigator.pushReplacementNamed(context, '/home');
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
-    }
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _usernameController.dispose();
+    _fullNameController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
   }
 
-  Future<void> handleSupabaseSignUp() async {
-    if (_formKey.currentState!.validate()) {
-      try {
-        await _supabaseAuthService.signUpWithEmailAndPassword(
-          _emailController.text,
-          _passwordController.text,
-        );
-        Navigator.pushReplacementNamed(context, '/home');
-      } catch (e) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
+  Future<void> _handleSignUp() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final authProvider = context.read<AuthProvider>();
+
+    final success = await authProvider.signUp(
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+      username: _usernameController.text.trim(),
+      fullName: _fullNameController.text.trim().isEmpty
+          ? null
+          : _fullNameController.text.trim(),
+    );
+
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      final error = authProvider.error ?? 'Sign up failed. Please try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error),
+          backgroundColor: Colors.red,
+        ),
+      );
+      authProvider.clearError();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        color: Colors.white,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Padding(
-              padding: EdgeInsets.only(bottom: 10),
-              child: Text(
-                "Signup Screen",
-                style: TextStyle(
-                  color: Colors.blue,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Icon(
+                  Icons.chat_bubble_rounded,
+                  size: 64,
+                  color: colorScheme.primary,
                 ),
-              ),
-            ),
-            FractionallySizedBox(
-              widthFactor: 0.8,
-
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(18),
+                const SizedBox(height: 16),
+                Text(
+                  'Create Account',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                const SizedBox(height: 8),
+                Text(
+                  'Join and start chatting',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                ),
+                const SizedBox(height: 40),
 
-                child: Form(
+                // Form
+                Form(
                   key: _formKey,
                   child: Column(
-                    spacing: 12,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Email field
                       TextFormField(
                         controller: _emailController,
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.email),
-                        ),
                         keyboardType: TextInputType.emailAddress,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email_outlined),
+                        ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Please Enter your email';
+                            return 'Please enter your email';
                           }
-                          if (!EmailValidator.validate(value)) {
-                            return 'Please Enter a Valid Email';
+                          if (!EmailValidator.validate(value.trim())) {
+                            return 'Please enter a valid email';
                           }
                           return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Username field
+                      TextFormField(
+                        controller: _usernameController,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Username',
+                          prefixIcon: Icon(Icons.alternate_email),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter a username';
+                          }
+                          if (value.trim().length < 3) {
+                            return 'Username must be at least 3 characters';
+                          }
+                          if (!RegExp(r'^[a-zA-Z0-9_]+$')
+                              .hasMatch(value.trim())) {
+                            return 'Only letters, numbers, and underscores allowed';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Full name field (optional)
+                      TextFormField(
+                        controller: _fullNameController,
+                        textInputAction: TextInputAction.next,
+                        decoration: const InputDecoration(
+                          labelText: 'Full Name (optional)',
+                          prefixIcon: Icon(Icons.person_outline),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Password field
+                      TextFormField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        textInputAction: TextInputAction.next,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter a password';
+                          }
+                          if (value.length < 8) {
+                            return 'Password must be at least 8 characters';
+                          }
+                          if (!_passwordRegex.hasMatch(value)) {
+                            return 'Must include uppercase, lowercase, number & special character';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Confirm password field
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: _obscureConfirmPassword,
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _handleSignUp(),
+                        decoration: InputDecoration(
+                          labelText: 'Confirm Password',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscureConfirmPassword =
+                                    !_obscureConfirmPassword;
+                              });
+                            },
+                          ),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please confirm your password';
+                          }
+                          if (value != _passwordController.text) {
+                            return 'Passwords do not match';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Sign up button
+                      Consumer<AuthProvider>(
+                        builder: (context, authProvider, _) {
+                          return ElevatedButton(
+                            onPressed:
+                                authProvider.isLoading ? null : _handleSignUp,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: colorScheme.primary,
+                              foregroundColor: colorScheme.onPrimary,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                            ),
+                            child: authProvider.isLoading
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Create Account',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                          );
                         },
                       ),
 
-                      TextFormField(
-                        controller: _passwordController,
-                        keyboardType: TextInputType.visiblePassword,
-                        obscureText: _obscureText1,
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          prefixIcon: Icon(Icons.lock),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscureText1
-                                  ? Icons.visibility
-                                  : Icons.visibility_off,
-                            ),
+                      const SizedBox(height: 24),
+
+                      // Login link
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Already have an account?',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          TextButton(
                             onPressed: () {
-                              setState(() {
-                                _obscureText1 = !_obscureText1;
-                              });
+                              Navigator.pushReplacementNamed(context, '/login');
                             },
+                            child: const Text('Sign In'),
                           ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a password';
-                          }
-                          if (value.length < 8) {
-                            return 'Password must be atleast 8 characters long';
-                          }
-                          if (!RegExp(
-                            r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$',
-                          ).hasMatch(value)) {
-                            return 'Must have uppercase, number and special character';
-                          }
-                          return null;
-                        },
-                      ),
-                      TextFormField(
-                        controller: _confirmPasswordController,
-                        keyboardType: TextInputType.visiblePassword,
-                        obscureText: _obscureText2,
-                        decoration: InputDecoration(
-                          labelText: 'Confirm Password',
-                          prefixIcon: Icon(Icons.lock),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscureText2
-                                  ? Icons.visibility
-                                  : Icons.visibility_off,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscureText2 = !_obscureText2;
-                              });
-                            },
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'Please enter a password';
-                          }
-                          if (value.length < 8) {
-                            return 'Password must be atleast 8 characters long';
-                          }
-                          if (!RegExp(
-                            r'^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$',
-                          ).hasMatch(value)) {
-                            return 'Must have uppercase, number and special character';
-                          }
-                          if (value != _passwordController.text) {
-                            return 'Password does not match';
-                          }
-                          return null;
-                        },
-                      ),
-                      Container(
-                        padding: EdgeInsets.only(top: 30),
-                        child: ElevatedButton(
-                          // onPressed: handleFirebaseSignUp,
-                          onPressed: handleSupabaseSignUp,
-                          style: ElevatedButton.styleFrom(
-                            padding: EdgeInsets.symmetric(
-                              vertical: 15,
-                              horizontal: 40,
-                            ),
-                            backgroundColor: Colors.blue,
-                          ),
-                          child: Text(
-                            'Register',
-                            style: TextStyle(color: Colors.white, fontSize: 20),
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => {
-                          Navigator.pushReplacementNamed(context, '/login'),
-                        },
-                        child: Text(
-                          "Already have an account? Login.",
-                          style: TextStyle(color: Colors.blue),
-                        ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
