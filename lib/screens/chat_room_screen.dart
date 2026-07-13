@@ -37,11 +37,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   Future<void> _initChat() async {
     final chatProvider = context.read<ChatProvider>();
-    // Start real-time listener first — it will deliver the full snapshot
-    // including any messages that arrive during the initial load.
+    // Clear any stale messages from a previous chat room
+    chatProvider.clearMessages();
+    // Start real-time listener — uses Supabase Realtime Channels so both
+    // sender and receiver get live updates.
     chatProvider.listenToMessages(widget.conversationId);
     // Also do a one-shot load so we have data immediately without waiting
-    // for the first stream event (which may have a small delay).
+    // for the first Realtime event (which may have a small delay).
     await chatProvider.loadMessages(widget.conversationId);
     _scrollToBottom();
   }

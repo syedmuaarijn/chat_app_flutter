@@ -1,10 +1,14 @@
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/models/message_model.dart';
 import 'package:chat_app_flutter/models/user_model.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChatService {
   final SupabaseClient _supabaseClient = Supabase.instance.client;
+
+  RealtimeChannel? _messageChannel;
+  RealtimeChannel? _conversationChannel;
 
   String? get currentUserId => _supabaseClient.auth.currentUser?.id;
 
@@ -199,11 +203,8 @@ class ChatService {
           .select()
           .single();
 
-      // Touch conversations.updated_at so the home screen listener fires
-      await _supabaseClient
-          .from('conversations')
-          .update({'updated_at': DateTime.now().toIso8601String()})
-          .eq('id', conversationId);
+      // The DB trigger on_message_created automatically updates
+      // conversations.updated_at — no manual update needed.
 
       return MessageModel.fromJson(data);
     } catch (e) {
@@ -226,28 +227,87 @@ class ChatService {
     }
   }
 
-  // ── Real-time streams ────────────────────────────────────────────────────
+  // ── Real-time subscriptions ──────────────────────────────────────────────
 
-  /// Emits the full up-to-date list of messages whenever the DB changes.
-  /// The provider is responsible for merging/replacing the list.
-  Stream<List<MessageModel>> listenToMessages(String conversationId) {
-    return _supabaseClient
-        .from('messages')
-        .stream(primaryKey: ['id'])
-        .eq('conversation_id', conversationId)
-        .order('created_at', ascending: true)
-        .map((data) =>
-            data.map((json) => MessageModel.fromJson(json)).toList());
+  /// Subscribe to real-time message changes for a specific conversation.
+  /// Uses Supabase Realtime Channels (postgres_changes) with a server-side
+  /// filter, so INSERT / UPDATE / DELETE events from ANY user in the
+  /// conversation are delivered reliably.
+  void subscribeToMessages(
+    String conversationId, {
+    required void Function(List<MessageModel> messages) onData,
+    required void Function(Object error) onError,
+  }) {
+    unsubscribeFromMessages();
+
+    _messageChannel = _supabaseClient.channel('chat-messages-$conversationId');
+    _messageChannel!.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'messages',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'conversation_id',
+        value: conversationId,
+      ),
+      callback: (PostgresChangePayload payload) {
+        // Reload the full message list for this conversation so we have
+        // a consistent, ordered snapshot including sender profile data.
+        getMessages(conversationId).then(onData).catchError(onError);
+      },
+    );
+    _messageChannel!.subscribe((status, error) {
+      debugPrint('📡 Message channel ($conversationId): $status');
+      if (error != null) debugPrint('❌ Message channel error: $error');
+    });
   }
 
-  /// Fires whenever the conversations table changes (updated_at changes on
-  /// every message send, so this is our trigger for home screen refresh).
-  Stream<List<Map<String, dynamic>>> listenToConversations() {
+  void unsubscribeFromMessages() {
+    if (_messageChannel != null) {
+      _supabaseClient.removeChannel(_messageChannel!);
+      _messageChannel = null;
+    }
+  }
+
+  /// Subscribe to events that should refresh the home-screen conversation
+  /// list.  We listen for new message INSERTs and conversation UPDATEs.
+  void subscribeToConversations({
+    required void Function() onRefresh,
+  }) {
+    unsubscribeFromConversations();
+
     final currentUser = currentUserId;
-    if (currentUser == null) return const Stream.empty();
-    return _supabaseClient
-        .from('conversations')
-        .stream(primaryKey: ['id'])
-        .order('updated_at', ascending: false);
+    if (currentUser == null) return;
+
+    _conversationChannel =
+        _supabaseClient.channel('chat-conversations-$currentUser');
+
+    // Any new message → refresh conversation list
+    _conversationChannel!.onPostgresChanges(
+      event: PostgresChangeEvent.insert,
+      schema: 'public',
+      table: 'messages',
+      callback: (PostgresChangePayload payload) => onRefresh(),
+    );
+
+    // Conversation row updated (e.g. updated_at via trigger) → refresh
+    _conversationChannel!.onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'conversations',
+      callback: (PostgresChangePayload payload) => onRefresh(),
+    );
+
+    _conversationChannel!.subscribe((status, error) {
+      debugPrint('📡 Conversation channel: $status');
+      if (error != null) debugPrint('❌ Conversation channel error: $error');
+    });
+  }
+
+  void unsubscribeFromConversations() {
+    if (_conversationChannel != null) {
+      _supabaseClient.removeChannel(_conversationChannel!);
+      _conversationChannel = null;
+    }
   }
 }

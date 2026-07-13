@@ -18,8 +18,7 @@ class ChatProvider with ChangeNotifier {
 
   String? _error;
 
-  StreamSubscription<List<MessageModel>>? _messageSubscription;
-  StreamSubscription<List<Map<String, dynamic>>>? _conversationSubscription;
+  String? _currentConversationId;
   Timer? _conversationDebounce;
 
   // ── Getters ────────────────────────────────────────────────────────────────
@@ -53,25 +52,20 @@ class ChatProvider with ChangeNotifier {
   /// Starts a real-time subscription. Whenever conversations.updated_at
   /// changes (which sendMessage now updates), reload the conversation list.
   void listenToConversations() {
-    _conversationSubscription?.cancel();
     _conversationDebounce?.cancel();
 
-    _conversationSubscription =
-        _chatService.listenToConversations().listen((data) {
-      // Debounce to avoid hammering the DB on rapid events
-      _conversationDebounce?.cancel();
-      _conversationDebounce =
-          Timer(const Duration(milliseconds: 300), loadConversations);
-    }, onError: (e) {
-      _error = 'Conversations stream error: $e';
-      notifyListeners();
-      debugPrint('❌ listenToConversations error: $e');
-    });
+    _chatService.subscribeToConversations(
+      onRefresh: () {
+        // Debounce to avoid hammering the DB on rapid events
+        _conversationDebounce?.cancel();
+        _conversationDebounce =
+            Timer(const Duration(milliseconds: 500), loadConversations);
+      },
+    );
   }
 
   void stopListeningToConversations() {
-    _conversationSubscription?.cancel();
-    _conversationSubscription = null;
+    _chatService.unsubscribeFromConversations();
     _conversationDebounce?.cancel();
   }
 
@@ -96,30 +90,33 @@ class ChatProvider with ChangeNotifier {
   /// We merge it with existing messages, preserving optimistic temp messages
   /// until the real ones arrive from the server.
   void listenToMessages(String conversationId) {
-    _messageSubscription?.cancel();
-    _messageSubscription =
-        _chatService.listenToMessages(conversationId).listen((messages) {
-      // Remove any optimistic temp messages that have been replaced by real ones
-      final realIds = messages.map((m) => m.id).toSet();
-      _messages.removeWhere((m) => m.id.startsWith('temp_') && realIds.isNotEmpty);
+    _currentConversationId = conversationId;
 
-      // Replace the message list with the server's authoritative snapshot
-      _messages = messages;
-      notifyListeners();
+    _chatService.subscribeToMessages(
+      conversationId,
+      onData: (messages) {
+        // Guard: only update if this is still the active conversation
+        if (_currentConversationId != conversationId) return;
 
-      // Mark incoming messages as read
-      _chatService.markMessagesAsRead(conversationId);
-    }, onError: (e) {
-      _error = 'Stream error: $e';
-      notifyListeners();
-      // Print to console for debugging
-      debugPrint('❌ listenToMessages error: $e');
-    });
+        // Replace with the server's authoritative snapshot, dropping any
+        // optimistic temp messages that the server has now confirmed.
+        _messages = messages;
+        notifyListeners();
+
+        // Mark incoming messages as read
+        _chatService.markMessagesAsRead(conversationId);
+      },
+      onError: (error) {
+        _error = 'Stream error: $error';
+        notifyListeners();
+        debugPrint('❌ listenToMessages error: $error');
+      },
+    );
   }
 
   void stopListeningToMessages() {
-    _messageSubscription?.cancel();
-    _messageSubscription = null;
+    _chatService.unsubscribeFromMessages();
+    _currentConversationId = null;
   }
 
   Future<bool> sendMessage(String conversationId, String content) async {
@@ -136,25 +133,19 @@ class ChatProvider with ChangeNotifier {
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
-      _messages.add(tempMessage);
+      _messages = [..._messages, tempMessage];
       notifyListeners();
 
-      // Send to server — this will trigger the stream on both devices
-      final sentMessage =
-          await _chatService.sendMessage(conversationId, content);
-
-      // Replace the temp message with the real one from the server
-      final tempIndex = _messages.indexWhere((m) => m.id == tempId);
-      if (tempIndex != -1) {
-        _messages[tempIndex] = sentMessage;
-        notifyListeners();
-      }
+      // Send to server — the Realtime channel will deliver the confirmed
+      // message back to both sender and receiver, replacing _messages with
+      // the full server snapshot (which drops the temp message).
+      await _chatService.sendMessage(conversationId, content);
 
       return true;
     } catch (e) {
       _error = e.toString();
-      // Remove the optimistic message if send failed
-      _messages.removeWhere((m) => m.id.startsWith('temp_'));
+      // Remove the optimistic message on failure
+      _messages = _messages.where((m) => !m.id.startsWith('temp_')).toList();
       notifyListeners();
       return false;
     }
@@ -216,8 +207,8 @@ class ChatProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _messageSubscription?.cancel();
-    _conversationSubscription?.cancel();
+    _chatService.unsubscribeFromMessages();
+    _chatService.unsubscribeFromConversations();
     _conversationDebounce?.cancel();
     super.dispose();
   }
