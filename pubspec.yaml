@@ -37,8 +37,8 @@ dependencies:
   passwordfield: ^0.2.0
   email_textfield: ^0.0.1
   email_validator: ^3.0.0
-  firebase_core: ^4.11.0
-  firebase_auth: ^6.5.4
+  # firebase_core: ^4.11.0
+  # firebase_auth: ^6.5.4
   supabase_flutter: ^2.15.2
   provider: ^6.1.5+1
   cached_network_image: ^3.4.1
@@ -46,6 +46,7 @@ dependencies:
   uuid: ^4.5.3
   shared_preferences: ^2.5.5
   timeago: ^3.7.1
+  emoji_picker_flutter: ^4.4.0
 
 dev_dependencies:
   flutter_test:

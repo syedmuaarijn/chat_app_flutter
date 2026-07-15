@@ -58,8 +58,10 @@ class ChatProvider with ChangeNotifier {
       onRefresh: () {
         // Debounce to avoid hammering the DB on rapid events
         _conversationDebounce?.cancel();
-        _conversationDebounce =
-            Timer(const Duration(milliseconds: 500), loadConversations);
+        _conversationDebounce = Timer(
+          const Duration(milliseconds: 500),
+          loadConversations,
+        );
       },
     );
   }
@@ -86,25 +88,27 @@ class ChatProvider with ChangeNotifier {
     }
   }
 
-  /// The stream now emits the FULL sorted list on every change.
-  /// We merge it with existing messages, preserving optimistic temp messages
-  /// until the real ones arrive from the server.
   void listenToMessages(String conversationId) {
     _currentConversationId = conversationId;
 
     _chatService.subscribeToMessages(
       conversationId,
       onData: (messages) {
-        // Guard: only update if this is still the active conversation
         if (_currentConversationId != conversationId) return;
 
-        // Replace with the server's authoritative snapshot, dropping any
-        // optimistic temp messages that the server has now confirmed.
         _messages = messages;
         notifyListeners();
 
-        // Mark incoming messages as read
+        // Only mark as read when user is actively viewing the chat room.
+        // The _currentConversationId guard ensures this never fires when
+        // the user is on the home screen.
         _chatService.markMessagesAsRead(conversationId);
+
+        _updateConversationUnread(conversationId, 0);
+        final lastMsg = messages.isNotEmpty ? messages.last : null;
+        if (lastMsg != null) {
+          _updateConversationLastMessage(conversationId, lastMsg);
+        }
       },
       onError: (error) {
         _error = 'Stream error: $error';
@@ -112,6 +116,30 @@ class ChatProvider with ChangeNotifier {
         debugPrint('❌ listenToMessages error: $error');
       },
     );
+  }
+
+  void _updateConversationUnread(String conversationId, int count) {
+    for (int i = 0; i < _conversations.length; i++) {
+      if (_conversations[i].id == conversationId) {
+        _conversations[i].unreadCount = count;
+        notifyListeners();
+        break;
+      }
+    }
+  }
+
+  void _updateConversationLastMessage(String conversationId, MessageModel message) {
+    for (int i = 0; i < _conversations.length; i++) {
+      if (_conversations[i].id == conversationId) {
+        _conversations[i].lastMessage = message;
+        notifyListeners();
+        break;
+      }
+    }
+  }
+
+  void markMessagesAsRead(String conversationId) {
+    _chatService.markMessagesAsRead(conversationId);
   }
 
   void stopListeningToMessages() {
@@ -189,6 +217,10 @@ class ChatProvider with ChangeNotifier {
   }
 
   Future<String?> getOrCreateConversation(String otherUserId) async {
+    for (final c in _conversations) {
+      if (c.otherUser?.id == otherUserId) return c.id;
+    }
+
     _error = null;
     try {
       return await _chatService.getOrCreateConversation(otherUserId);
@@ -196,6 +228,55 @@ class ChatProvider with ChangeNotifier {
       _error = e.toString();
       notifyListeners();
       return null;
+    }
+  }
+  Future<bool> deleteMessageForMe(String messageId) async {
+    _error = null;
+    try {
+      // Optimistically remove message from local list
+      _messages = _messages.where((m) => m.id != messageId).toList();
+      notifyListeners();
+
+      await _chatService.deleteMessageForMe(messageId);
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteMessageForEveryone(String messageId) async {
+    _error = null;
+    try {
+      // Optimistically remove message from local list
+      _messages = _messages.where((m) => m.id != messageId).toList();
+      notifyListeners();
+
+      await _chatService.deleteMessageForEveryone(messageId);
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> deleteConversation(String conversationId) async {
+    _error = null;
+    try {
+      // Optimistically remove conversation from the local list
+      _conversations = _conversations
+          .where((c) => c.id != conversationId)
+          .toList();
+      notifyListeners();
+
+      await _chatService.deleteConversation(conversationId);
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 

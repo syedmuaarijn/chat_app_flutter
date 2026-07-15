@@ -156,6 +156,7 @@ class SupabaseAuthService {
           .from('profiles')
           .update(updates)
           .eq('id', userId)
+          .select()
           .single();
 
       return UserModel.fromJson(profileData);
