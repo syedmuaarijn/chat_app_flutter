@@ -14,59 +14,75 @@ class ConversationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final other = conversation.otherUser;
-    final lastMsg = conversation.lastMessage;
-    final unread = conversation.unreadCount;
-
-    final displayName =
-        (other?.fullName.isNotEmpty == true) ? other!.fullName : (other?.username ?? '');
-    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+    final conv = conversation;
+    final lastMsg = conv.lastMessage;
+    final unread = conv.unreadCount;
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       leading: CircleAvatar(
         radius: 26,
         backgroundColor: colorScheme.primaryContainer,
-        backgroundImage: (other?.avatarUrl.isNotEmpty == true)
-            ? NetworkImage(other!.avatarUrl)
+        backgroundImage: conv.displayAvatar.isNotEmpty
+            ? NetworkImage(conv.displayAvatar)
             : null,
-        child: (other?.avatarUrl.isEmpty ?? true)
-            ? Text(
-                initial,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onPrimaryContainer,
-                ),
+        child: conv.displayAvatar.isEmpty
+            ? Icon(
+                conv.isGroup ? Icons.group : Icons.person,
+                color: colorScheme.onPrimaryContainer,
+                size: 26,
               )
             : null,
       ),
       title: Text(
-        displayName,
+        conv.displayName,
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: lastMsg != null
-          ? Text(
-              lastMsg.content,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: unread > 0
-                    ? colorScheme.onSurface
-                    : colorScheme.onSurface.withValues(alpha: 0.55),
-                fontWeight:
-                    unread > 0 ? FontWeight.w500 : FontWeight.normal,
-                fontSize: 13,
+      subtitle: Row(
+        children: [
+          if (lastMsg != null && !lastMsg.isSystemMessage) ...[
+            Flexible(
+              child: Text(
+                lastMsg.content,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: unread > 0
+                      ? colorScheme.onSurface
+                      : colorScheme.onSurface.withValues(alpha: 0.55),
+                  fontWeight: unread > 0 ? FontWeight.w500 : FontWeight.normal,
+                  fontSize: 13,
+                ),
               ),
-            )
-          : Text(
+            ),
+          ] else if (lastMsg != null && lastMsg.isSystemMessage) ...[
+            Icon(Icons.info_outline, size: 14,
+                color: colorScheme.onSurface.withValues(alpha: 0.4)),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                lastMsg.content,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colorScheme.onSurface.withValues(alpha: 0.55),
+                  fontStyle: FontStyle.italic,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ] else
+            Text(
               'No messages yet',
               style: TextStyle(
                 color: colorScheme.onSurface.withValues(alpha: 0.4),
                 fontSize: 13,
               ),
             ),
+        ],
+      ),
       trailing: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,

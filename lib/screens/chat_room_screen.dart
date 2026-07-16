@@ -1,5 +1,6 @@
-import 'package:chat_app_flutter/models/user_model.dart';
+import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
+import 'package:chat_app_flutter/screens/group_info_screen.dart';
 import 'package:chat_app_flutter/widgets/chat/date_separator.dart';
 import 'package:chat_app_flutter/widgets/chat/message_bubble.dart';
 import 'package:chat_app_flutter/widgets/chat/message_input_bar.dart';
@@ -9,12 +10,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChatRoomScreen extends StatefulWidget {
   final String conversationId;
-  final UserModel otherUser;
+  final ConversationModel conversation;
 
   const ChatRoomScreen({
     super.key,
     required this.conversationId,
-    required this.otherUser,
+    required this.conversation,
   });
 
   @override
@@ -28,6 +29,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       Supabase.instance.client.auth.currentUser?.id ?? '';
 
   bool _isSending = false;
+  bool _canSend = true;
+  bool _leftGroup = false;
 
   @override
   void initState() {
@@ -40,14 +43,39 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Future<void> _initChat() async {
     final chatProvider = context.read<ChatProvider>();
     chatProvider.clearMessages();
-    chatProvider.listenToMessages(widget.conversationId);
     await chatProvider.loadMessages(widget.conversationId);
+
+    if (widget.conversation.isGroup) {
+      await chatProvider.loadCurrentUserRole(widget.conversationId);
+      _checkCanSend(chatProvider);
+    }
     _scrollToBottom();
+  }
+
+  void _checkCanSend(ChatProvider chatProvider) {
+    if (chatProvider.currentUserRole.isEmpty) {
+      setState(() {
+        _canSend = false;
+        _leftGroup = true;
+      });
+      return;
+    }
+    if (widget.conversation.onlyAdminsCanMessage &&
+        chatProvider.currentUserRole == 'member') {
+      setState(() {
+        _canSend = false;
+        _leftGroup = false;
+      });
+    } else {
+      setState(() {
+        _canSend = true;
+        _leftGroup = false;
+      });
+    }
   }
 
   @override
   void dispose() {
-    context.read<ChatProvider>().markMessagesAsRead(widget.conversationId);
     context.read<ChatProvider>().stopListeningToMessages();
     _messageController.dispose();
     _scrollController.dispose();
@@ -64,9 +92,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             curve: Curves.easeOut,
           );
         } else {
-          _scrollController.jumpTo(
-            _scrollController.position.maxScrollExtent,
-          );
+          _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
         }
       }
     });
@@ -74,146 +100,125 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty || _isSending) return;
+    if (text.isEmpty || _isSending || !_canSend) return;
+
+    final role = context.read<ChatProvider>().currentUserRole;
+    if (role.isEmpty) {
+      setState(() => _canSend = false);
+      return;
+    }
 
     setState(() => _isSending = true);
     _messageController.clear();
 
     final success = await context.read<ChatProvider>().sendMessage(
-          widget.conversationId,
-          text,
-        );
+      widget.conversationId,
+      text,
+    );
 
     if (mounted) {
       setState(() => _isSending = false);
       if (success) {
-        context.read<ChatProvider>().markMessagesAsRead(widget.conversationId);
         _scrollToBottom(animated: true);
       } else {
         _messageController.text = text;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to send message'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(context.read<ChatProvider>().error ?? 'Failed to send'), backgroundColor: Colors.red),
         );
       }
     }
   }
 
+  void _openGroupInfo() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GroupInfoScreen(
+          conversationId: widget.conversationId,
+          conversation: widget.conversation,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final displayName = widget.otherUser.fullName.isNotEmpty
-        ? widget.otherUser.fullName
-        : widget.otherUser.username;
-    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+    final conv = widget.conversation;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         titleSpacing: 0,
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: colorScheme.primaryContainer,
-              backgroundImage: widget.otherUser.avatarUrl.isNotEmpty
-                  ? NetworkImage(widget.otherUser.avatarUrl)
-                  : null,
-              child: widget.otherUser.avatarUrl.isEmpty
-                  ? Text(
-                      initial,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: colorScheme.onPrimaryContainer,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                displayName,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 17,
-                ),
-                overflow: TextOverflow.ellipsis,
+        title: GestureDetector(
+          onTap: conv.isGroup ? _openGroupInfo : null,
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: colorScheme.primaryContainer,
+                backgroundImage: conv.displayAvatar.isNotEmpty ? NetworkImage(conv.displayAvatar) : null,
+                child: conv.displayAvatar.isEmpty ? Text(conv.displayInitial) : null,
               ),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(conv.displayName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17), overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
         ),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              if (value == 'clear') {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('Clear Chat?'),
+                    content: const Text('Are you sure you want to clear this chat for you?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                      TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear')),
+                    ],
+                  ),
+                );
+                if (confirmed == true && mounted) {
+                  await context.read<ChatProvider>().clearChat(widget.conversationId);
+                }
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'clear', child: Text('Clear Chat')),
+            ],
+          ),
+        ],
       ),
       body: Column(
         children: [
           Expanded(
             child: Consumer<ChatProvider>(
               builder: (context, chatProvider, _) {
-                if (chatProvider.isMessagesLoading && chatProvider.messages.isEmpty) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (chatProvider.messages.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No messages yet.\nSay hello!',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: colorScheme.onSurface.withValues(alpha: 0.4),
-                      ),
-                    ),
-                  );
-                }
+                if (chatProvider.isMessagesLoading) return const Center(child: CircularProgressIndicator());
+                if (chatProvider.messages.isEmpty) return const Center(child: Text('No messages yet.'));
 
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _scrollToBottom(animated: true);
-                });
-
-                final messages = chatProvider.messages;
                 return ListView.builder(
                   controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
-                  itemCount: messages.length,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  itemCount: chatProvider.messages.length,
                   itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final isMe = message.senderId == _currentUserId;
-
-                    final showDate = index == 0 ||
-                        !_isSameDay(
-                          messages[index - 1].createdAt,
-                          message.createdAt,
-                        );
-
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        if (showDate) DateSeparator(date: message.createdAt),
-                        MessageBubble(
-                          message: message,
-                          isMe: isMe,
-                        ),
-                      ],
-                    );
+                    final message = chatProvider.messages[index];
+                    return MessageBubble(message: message, isMe: message.senderId == _currentUserId, isGroup: conv.isGroup);
                   },
                 );
               },
             ),
           ),
-          MessageInputBar(
-            controller: _messageController,
-            isSending: _isSending,
-            onSend: _sendMessage,
-          ),
+          if (_canSend)
+            MessageInputBar(controller: _messageController, isSending: _isSending, onSend: _sendMessage)
+          else
+            Container(padding: const EdgeInsets.all(16), child: Text(_leftGroup ? 'You left this group' : 'Only admins can send messages', style: const TextStyle(fontStyle: FontStyle.italic))),
         ],
       ),
     );
-  }
-
-  bool _isSameDay(DateTime a, DateTime b) {
-    final la = a.toLocal();
-    final lb = b.toLocal();
-    return la.year == lb.year && la.month == lb.month && la.day == lb.day;
   }
 }

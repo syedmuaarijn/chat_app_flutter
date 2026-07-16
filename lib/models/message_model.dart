@@ -3,7 +3,7 @@ enum MessageStatus { sending, sent, delivered, read }
 class MessageModel {
   final String id;
   final String conversationId;
-  final String senderId;
+  final String? senderId;
   final String content;
   final bool isRead;
   final bool isDelivered;
@@ -11,6 +11,8 @@ class MessageModel {
   final DateTime updatedAt;
 
   final List<String> deletedFor;
+
+  final bool isSystemMessage;
 
   String? senderUsername;
   String? senderAvatarUrl;
@@ -25,7 +27,7 @@ class MessageModel {
   MessageModel({
     required this.id,
     required this.conversationId,
-    required this.senderId,
+    this.senderId,
     required this.content,
     required this.isRead,
     this.isDelivered = false,
@@ -34,13 +36,14 @@ class MessageModel {
     this.deletedFor = const [],
     this.senderUsername,
     this.senderAvatarUrl,
+    this.isSystemMessage = false,
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
     return MessageModel(
       id: json['id'] as String,
       conversationId: json['conversation_id'] as String,
-      senderId: json['sender_id'] as String,
+      senderId: json['sender_id'] as String?,
       content: json['content'] as String,
       isRead: (json['is_read'] as bool?) ?? false,
       isDelivered: (json['is_delivered'] as bool?) ?? false,
@@ -53,6 +56,7 @@ class MessageModel {
       deletedFor: (json['deleted_for'] as List?)?.map((e) => e.toString()).toList() ?? const [],
       senderUsername: json['sender_username'] as String?,
       senderAvatarUrl: json['sender_avatar_url'] as String?,
+      isSystemMessage: (json['is_system_message'] as bool?) ?? false,
     );
   }
 
@@ -67,6 +71,7 @@ class MessageModel {
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'deleted_for': deletedFor,
+      'is_system_message': isSystemMessage,
     };
   }
 
@@ -82,6 +87,7 @@ class MessageModel {
     List<String>? deletedFor,
     String? senderUsername,
     String? senderAvatarUrl,
+    bool? isSystemMessage,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -95,13 +101,14 @@ class MessageModel {
       deletedFor: deletedFor ?? this.deletedFor,
       senderUsername: senderUsername ?? this.senderUsername,
       senderAvatarUrl: senderAvatarUrl ?? this.senderAvatarUrl,
+      isSystemMessage: isSystemMessage ?? this.isSystemMessage,
     );
   }
 
   @override
   String toString() {
     final preview = content.length > 20 ? content.substring(0, 20) : content;
-    return 'MessageModel(id: $id, senderId: $senderId, content: $preview...)';
+    return 'MessageModel(id: $id, senderId: $senderId, content: $preview..., isSystem: $isSystemMessage)';
   }
 
   @override

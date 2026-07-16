@@ -2,6 +2,7 @@ import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/providers/auth_provider.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/chat_room_screen.dart';
+import 'package:chat_app_flutter/screens/create_group_screen.dart';
 import 'package:chat_app_flutter/screens/new_chat_screen.dart';
 import 'package:chat_app_flutter/screens/settings_screen.dart';
 import 'package:chat_app_flutter/widgets/home/conversation_tile.dart';
@@ -17,6 +18,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  int _currentTab = 0;
+
   @override
   void initState() {
     super.initState();
@@ -45,13 +48,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openConversation(ConversationModel conversation) {
-    if (conversation.otherUser == null) return;
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ChatRoomScreen(
           conversationId: conversation.id,
-          otherUser: conversation.otherUser!,
+          conversation: conversation,
         ),
       ),
     ).then((_) {
@@ -63,6 +65,15 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const NewChatScreen()),
+    ).then((_) {
+      if (mounted) context.read<ChatProvider>().loadConversations();
+    });
+  }
+
+  void _openCreateGroup() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
     ).then((_) {
       if (mounted) context.read<ChatProvider>().loadConversations();
     });
@@ -83,21 +94,29 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final labelColor = colorScheme.onSurface.withValues(alpha: 0.8);
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: const Text(
-          'Messages',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+        title: Text(
+          _currentTab == 0 ? 'Messages' : 'Groups',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
         automaticallyImplyLeading: false,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add_outlined),
-            tooltip: 'New Chat',
-            onPressed: _openNewChat,
-          ),
+          if (_currentTab == 0)
+            IconButton(
+              icon: const Icon(Icons.person_add_outlined),
+              tooltip: 'New Chat',
+              onPressed: _openNewChat,
+            ),
+          if (_currentTab == 1)
+            IconButton(
+              icon: const Icon(Icons.group_add_outlined),
+              tooltip: 'New Group',
+              onPressed: _openCreateGroup,
+            ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: 'Settings',
@@ -112,25 +131,34 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Consumer<ChatProvider>(
         builder: (context, chatProvider, _) {
+          final conversations = _currentTab == 0
+              ? chatProvider.conversations.where((c) => !c.isGroup).toList()
+              : chatProvider.conversations.where((c) => c.isGroup).toList();
+
           if (chatProvider.isConversationsLoading && chatProvider.conversations.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (chatProvider.conversations.isEmpty) {
-            return const EmptyConversations();
+          if (conversations.isEmpty) {
+            return EmptyConversations(
+              icon: _currentTab == 0 ? Icons.chat_bubble_outline_rounded : Icons.group_outlined,
+              message: _currentTab == 0
+                  ? 'No conversations yet.\nStart a new chat!'
+                  : 'No groups yet.\nCreate a group!',
+            );
           }
 
           return RefreshIndicator(
             onRefresh: () => chatProvider.loadConversations(),
             child: ListView.separated(
-              itemCount: chatProvider.conversations.length,
+              itemCount: conversations.length,
               separatorBuilder: (_, _) => Divider(
                 height: 1,
                 indent: 72,
                 color: colorScheme.outlineVariant.withValues(alpha: 0.5),
               ),
               itemBuilder: (context, index) {
-                final conversation = chatProvider.conversations[index];
-                
+                final conversation = conversations[index];
+
                 return Dismissible(
                   key: Key(conversation.id),
                   direction: DismissDirection.endToStart,
@@ -145,7 +173,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       context: context,
                       builder: (context) => AlertDialog(
                         title: const Text('Delete Chat?'),
-                        content: const Text('This will delete all messages in this conversation permanently for you.'),
+                        content: const Text(
+                            'This will delete all messages in this conversation permanently for you.'),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
@@ -161,10 +190,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                   onDismissed: (direction) async {
-                    final success = await chatProvider.deleteConversation(conversation.id);
+                    final success =
+                        await chatProvider.deleteConversation(conversation.id);
                     if (!success && context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(chatProvider.error ?? 'Failed to delete conversation')),
+                        SnackBar(
+                            content: Text(
+                                chatProvider.error ?? 'Failed to delete conversation')),
                       );
                     }
                   },
@@ -178,12 +210,33 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openNewChat,
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: const Icon(Icons.chat_bubble_outline_rounded),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentTab,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        destinations: [
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline_rounded, color: labelColor),
+            selectedIcon: Icon(Icons.chat_bubble_rounded, color: colorScheme.primary),
+            label: 'Chats',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.groups_outlined, color: labelColor),
+            selectedIcon: Icon(Icons.groups, color: colorScheme.primary),
+            label: 'Groups',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined, color: labelColor),
+            selectedIcon: Icon(Icons.settings, color: colorScheme.primary),
+            label: 'Settings',
+          ),
+        ],
+        onDestinationSelected: (index) {
+          if (index == 2) {
+            _openSettings();
+          } else {
+            setState(() => _currentTab = index);
+          }
+        },
       ),
     );
   }

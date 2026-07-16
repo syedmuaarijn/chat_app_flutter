@@ -1,3 +1,4 @@
+import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/models/user_model.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/chat_room_screen.dart';
@@ -18,7 +19,6 @@ class _NewChatScreenState extends State<NewChatScreen> {
   @override
   void initState() {
     super.initState();
-    // Load all users on open
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<ChatProvider>().loadAllUsers();
       setState(() => _hasSearched = true);
@@ -53,12 +53,21 @@ class _NewChatScreenState extends State<NewChatScreen> {
       return;
     }
 
+    final conversation = chatProvider.conversations.firstWhere(
+      (c) => c.id == conversationId,
+      orElse: () => ConversationModel(
+        id: conversationId,
+        createdAt: DateTime.now(),
+        otherUser: user,
+      ),
+    );
+
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ChatRoomScreen(
           conversationId: conversationId,
-          otherUser: user,
+          conversation: conversation,
         ),
       ),
     );
