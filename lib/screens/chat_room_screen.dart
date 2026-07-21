@@ -28,6 +28,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       Supabase.instance.client.auth.currentUser?.id ?? '';
 
   bool _isSending = false;
+  bool _isBlockStatusLoading = false;
+  bool _isBlockedByMe = false;
 
   @override
   void initState() {
@@ -42,6 +44,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     chatProvider.clearMessages();
     chatProvider.clearGroupParticipants();
     chatProvider.setActiveConversation(widget.conversationId);
+    if (!widget.conversation.isGroup && widget.conversation.otherUser != null) {
+      setState(() => _isBlockStatusLoading = true);
+      _isBlockedByMe = await chatProvider.isCurrentUserBlocking(
+        widget.conversation.otherUser!.id,
+      );
+      if (mounted) setState(() => _isBlockStatusLoading = false);
+    }
     
     // Begin listening to real-time message stream
     chatProvider.listenToMessages(widget.conversationId);
@@ -110,14 +119,25 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         _scrollToBottom(animated: true);
       } else {
         _messageController.text = text;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(chatProvider.error ?? 'Failed to send'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showSendErrorDialog(chatProvider.error ?? 'Failed to send message.');
       }
     }
+  }
+
+  Future<void> _showSendErrorDialog(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Message not sent'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openGroupInfo() {
@@ -130,6 +150,56 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _toggleBlock() async {
+    final otherUser = widget.conversation.otherUser;
+    if (otherUser == null) return;
+
+    if (!_isBlockedByMe) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Block user?'),
+          content: Text(
+            '${widget.conversation.displayName} will no longer be able to find you in search or send you direct messages.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Block'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+
+    setState(() => _isBlockStatusLoading = true);
+    final success = _isBlockedByMe
+        ? await context.read<ChatProvider>().unblockUser(otherUser.id)
+        : await context.read<ChatProvider>().blockUser(otherUser.id);
+    if (!mounted) return;
+
+    setState(() {
+      _isBlockStatusLoading = false;
+      if (success) _isBlockedByMe = !_isBlockedByMe;
+    });
+    if (success) {
+      await context.read<ChatProvider>().loadMessages(widget.conversationId);
+    } else if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(context.read<ChatProvider>().error ?? 'Could not update block'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -182,7 +252,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) async {
-              if (value == 'clear') {
+              if (value == 'block') {
+                await _toggleBlock();
+              } else if (value == 'clear') {
                 final confirmed = await showDialog<bool>(
                   context: context,
                   builder: (_) => AlertDialog(
@@ -200,6 +272,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               }
             },
             itemBuilder: (context) => [
+              if (!conv.isGroup)
+                PopupMenuItem(
+                  value: 'block',
+                  child: Text(_isBlockedByMe ? 'Unblock user' : 'Block user'),
+                ),
               const PopupMenuItem(value: 'clear', child: Text('Clear Chat')),
             ],
           ),
@@ -226,6 +303,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             const Padding(
               padding: EdgeInsets.all(16.0),
               child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_isBlockStatusLoading)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_isBlockedByMe)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                'You blocked this user. Unblock them to send messages.',
+                style: TextStyle(fontStyle: FontStyle.italic),
+              ),
             )
           else if (canSend)
             MessageInputBar(controller: _messageController, isSending: _isSending, onSend: _sendMessage)

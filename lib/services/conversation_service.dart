@@ -409,12 +409,9 @@ class ConversationService {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
-      final data = await _supabaseClient
-          .from('profiles')
-          .select()
-          .ilike('username', '%$query%')
-          .neq('id', currentUser)
-          .limit(20);
+      final data = await _supabaseClient.rpc('search_visible_profiles', params: {
+        'search_term': query,
+      });
       return (data as List).map((json) => UserModel.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to search users: $e');
@@ -425,11 +422,9 @@ class ConversationService {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
-      final data = await _supabaseClient
-          .from('profiles')
-          .select()
-          .neq('id', currentUser)
-          .order('username');
+      final data = await _supabaseClient.rpc('search_visible_profiles', params: {
+        'search_term': '',
+      });
       return (data as List).map((json) => UserModel.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to get users: $e');

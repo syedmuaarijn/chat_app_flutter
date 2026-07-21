@@ -5,6 +5,7 @@ import 'package:chat_app_flutter/services/message_service.dart';
 import 'package:chat_app_flutter/services/receipt_service.dart';
 import 'package:chat_app_flutter/services/conversation_service.dart';
 import 'package:chat_app_flutter/services/chat_service.dart';
+import 'package:chat_app_flutter/services/block_service.dart';
 import 'package:flutter/material.dart';
 
 class ChatProvider with ChangeNotifier {
@@ -12,6 +13,7 @@ class ChatProvider with ChangeNotifier {
   final ReceiptService _receiptService = ReceiptService();
   final ConversationService _conversationService = ConversationService();
   final ChatService _chatService = ChatService();
+  final BlockService _blockService = BlockService();
 
   List<ConversationModel> _conversations = [];
   List<MessageModel> _messages = [];
@@ -221,7 +223,10 @@ class ChatProvider with ChangeNotifier {
       return true;
     } catch (e) {
       _messages = _messages.where((m) => m.id != tempId).toList();
-      _error = e.toString();
+      final errorText = e.toString().toLowerCase();
+      _error = errorText.contains('blocked you')
+          ? 'You cannot send messages to this user because they have blocked you.'
+          : 'Could not send your message. Please try again.';
       notifyListeners();
       return false;
     }
@@ -304,6 +309,38 @@ class ChatProvider with ChangeNotifier {
       _error = e.toString();
       notifyListeners();
       return null;
+    }
+  }
+
+  Future<bool> isCurrentUserBlocking(String otherUserId) async {
+    try {
+      return await _blockService.isCurrentUserBlocking(otherUserId);
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> blockUser(String otherUserId) async {
+    try {
+      await _blockService.blockUser(otherUserId);
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
+  Future<bool> unblockUser(String otherUserId) async {
+    try {
+      await _blockService.unblockUser(otherUserId);
+      return true;
+    } catch (e) {
+      _error = e.toString();
+      notifyListeners();
+      return false;
     }
   }
 
