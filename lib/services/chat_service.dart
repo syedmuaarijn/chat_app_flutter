@@ -158,7 +158,8 @@ class ChatService {
       final participantData = await _supabaseClient
           .from('conversation_participants')
           .select('conversation_id')
-          .eq('user_id', currentUser);
+          .eq('user_id', currentUser)
+          .eq('status', 'active');
 
       final List<ConversationModel> conversations = [];
       final deletedConvs = await _getDeletedConversations();
@@ -325,14 +326,28 @@ class ChatService {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
-      await _supabaseClient
+
+      // Find messages from others that are unread
+      final unreadMessages = await _supabaseClient
           .from('messages')
-          .update({'is_read': true})
+          .select('id')
           .eq('conversation_id', conversationId)
           .neq('sender_id', currentUser)
           .eq('is_read', false);
+
+      if ((unreadMessages as List).isNotEmpty) {
+        final List<Map<String, dynamic>> receipts = unreadMessages.map((m) => {
+          'message_id': m['id'] as String,
+          'user_id': currentUser,
+          'receipt_type': 'read',
+        }).toList();
+
+        await _supabaseClient
+            .from('message_receipts')
+            .upsert(receipts, onConflict: 'message_id, user_id, receipt_type');
+      }
     } catch (e) {
-      throw Exception('Failed to mark messages as read: $e');
+      debugPrint('Failed to mark messages as read: $e');
     }
   }
 
@@ -340,12 +355,26 @@ class ChatService {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) return;
-      await _supabaseClient
+
+      // Find messages from others that are undelivered
+      final undeliveredMessages = await _supabaseClient
           .from('messages')
-          .update({'is_delivered': true})
+          .select('id')
           .eq('conversation_id', conversationId)
           .neq('sender_id', currentUser)
           .eq('is_delivered', false);
+
+      if ((undeliveredMessages as List).isNotEmpty) {
+        final List<Map<String, dynamic>> receipts = undeliveredMessages.map((m) => {
+          'message_id': m['id'] as String,
+          'user_id': currentUser,
+          'receipt_type': 'delivered',
+        }).toList();
+
+        await _supabaseClient
+            .from('message_receipts')
+            .upsert(receipts, onConflict: 'message_id, user_id, receipt_type');
+      }
     } catch (e) {
       debugPrint('Failed to mark messages as delivered: $e');
     }
@@ -404,15 +433,24 @@ class ChatService {
       schema: 'public',
       table: 'messages',
       callback: (PostgresChangePayload payload) {
-        // NOTE: Do NOT mark messages as delivered here. Delivery is only
-        // recorded when the recipient actually opens the conversation
-        // (see getMessages -> markMessagesAsDelivered). Marking delivered
-        // globally on every insert caused "blue tick while chat is closed".
-        // We also avoid a full loadConversations() reload on every insert
-        // (that caused the unread counter to appear a second later); the
-        // optimistic onNewMessage update is enough for message inserts.
+        // Optimistic home-screen update for new incoming messages.
+        // We do NOT mark delivered here — delivery is recorded only when
+        // the recipient actually opens the conversation (via loadMessages).
         onNewMessage(payload);
       },
+    );
+
+    // ── CRITICAL FIX ────────────────────────────────────────────────────────
+    // Listen for UPDATE events on the messages table.
+    // When the DB trigger fires (e.g. recipient read a message), it sets
+    // is_delivered = true or is_read = true on the messages row.
+    // Without this listener, the SENDER'S client never knows about the change
+    // and tick icons stay grey/single forever.
+    _conversationChannel!.onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'messages',
+      callback: (PostgresChangePayload payload) => onRefresh(),
     );
 
     _conversationChannel!.onPostgresChanges(

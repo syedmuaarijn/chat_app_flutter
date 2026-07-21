@@ -80,7 +80,8 @@ class ConversationService {
       final participantData = await _supabaseClient
           .from('conversation_participants')
           .select('conversation_id')
-          .eq('user_id', currentUser);
+          .eq('user_id', currentUser)
+          .eq('status', 'active');
 
       final List<ConversationModel> conversations = [];
       final deletedConvs = await getDeletedConversations();

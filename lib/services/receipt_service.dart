@@ -40,7 +40,7 @@ class ReceiptService {
     try {
       final data = await _supabaseClient
           .from('message_receipts')
-          .select('receipt_type, profiles:user_id(username, full_name, avatar_url)')
+          .select('receipt_type, profiles(username, full_name, avatar_url)')
           .eq('message_id', messageId);
 
       final Map<String, List<Map<String, dynamic>>> info = {

@@ -1,5 +1,7 @@
 import 'package:chat_app_flutter/models/conversation_model.dart';
+import 'package:chat_app_flutter/models/message_model.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ConversationTile extends StatelessWidget {
   final ConversationModel conversation;
@@ -17,6 +19,12 @@ class ConversationTile extends StatelessWidget {
     final conv = conversation;
     final lastMsg = conv.lastMessage;
     final unread = conv.unreadCount;
+
+    // Determine if the last message was sent by the current user so we can
+    // show WhatsApp-style tick icons (sent / delivered / read).
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final isLastMsgMine =
+        lastMsg != null && lastMsg.senderId == currentUserId && !lastMsg.isSystemMessage;
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -42,6 +50,11 @@ class ConversationTile extends StatelessWidget {
       ),
       subtitle: Row(
         children: [
+          // Tick icon prefix when the last message is from the current user
+          if (isLastMsgMine) ...[
+            _TickIcon(status: lastMsg.status, colorScheme: colorScheme),
+            const SizedBox(width: 4),
+          ],
           if (lastMsg != null && !lastMsg.isSystemMessage) ...[
             Flexible(
               child: Text(
@@ -58,8 +71,8 @@ class ConversationTile extends StatelessWidget {
               ),
             ),
           ] else if (lastMsg != null && lastMsg.isSystemMessage) ...[
-            Icon(Icons.info_outline, size: 14,
-                color: colorScheme.onSurface.withValues(alpha: 0.4)),
+            Icon(Icons.info_outline,
+                size: 14, color: colorScheme.onSurface.withValues(alpha: 0.4)),
             const SizedBox(width: 4),
             Flexible(
               child: Text(
@@ -138,5 +151,40 @@ class ConversationTile extends StatelessWidget {
       return days[local.weekday - 1];
     }
     return '${local.day}/${local.month}/${local.year % 100}';
+  }
+}
+
+// ── Tick icon widget ─────────────────────────────────────────────────────────
+
+class _TickIcon extends StatelessWidget {
+  final MessageStatus status;
+  final ColorScheme colorScheme;
+
+  const _TickIcon({required this.status, required this.colorScheme});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (status) {
+      case MessageStatus.sending:
+        return SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(
+            strokeWidth: 1.5,
+            color: colorScheme.onSurface.withValues(alpha: 0.45),
+          ),
+        );
+      case MessageStatus.sent:
+        // Single grey tick — message is in the server but not yet delivered.
+        return Icon(Icons.check, size: 14,
+            color: colorScheme.onSurface.withValues(alpha: 0.55));
+      case MessageStatus.delivered:
+        // Double grey tick — delivered to recipient's device.
+        return Icon(Icons.done_all, size: 14,
+            color: colorScheme.onSurface.withValues(alpha: 0.55));
+      case MessageStatus.read:
+        // Double BLUE tick — recipient has read the message.
+        return const Icon(Icons.done_all, size: 14, color: Color(0xFF53BDEB));
+    }
   }
 }

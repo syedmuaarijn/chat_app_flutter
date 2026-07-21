@@ -1,11 +1,9 @@
 import 'package:chat_app_flutter/models/message_model.dart';
-import 'package:chat_app_flutter/services/receipt_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
 class MessageService {
   final SupabaseClient _supabaseClient = Supabase.instance.client;
-  final ReceiptService _receiptService = ReceiptService();
   String? get currentUserId => _supabaseClient.auth.currentUser?.id;
   
   RealtimeChannel? _messageChannel;

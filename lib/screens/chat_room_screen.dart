@@ -1,7 +1,6 @@
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/group_info_screen.dart';
-import 'package:chat_app_flutter/widgets/chat/date_separator.dart';
 import 'package:chat_app_flutter/widgets/chat/message_bubble.dart';
 import 'package:chat_app_flutter/widgets/chat/message_input_bar.dart';
 import 'package:flutter/material.dart';
@@ -29,8 +28,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       Supabase.instance.client.auth.currentUser?.id ?? '';
 
   bool _isSending = false;
-  bool _canSend = true;
-  bool _leftGroup = false;
 
   @override
   void initState() {
@@ -43,40 +40,26 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Future<void> _initChat() async {
     final chatProvider = context.read<ChatProvider>();
     chatProvider.clearMessages();
+    chatProvider.clearGroupParticipants();
+    chatProvider.setActiveConversation(widget.conversationId);
+    
+    // Begin listening to real-time message stream
+    chatProvider.listenToMessages(widget.conversationId);
+    
+    // Load initial list of messages
     await chatProvider.loadMessages(widget.conversationId);
 
     if (widget.conversation.isGroup) {
       await chatProvider.loadCurrentUserRole(widget.conversationId);
-      _checkCanSend(chatProvider);
     }
     _scrollToBottom();
   }
 
-  void _checkCanSend(ChatProvider chatProvider) {
-    if (chatProvider.currentUserRole.isEmpty) {
-      setState(() {
-        _canSend = false;
-        _leftGroup = true;
-      });
-      return;
-    }
-    if (widget.conversation.onlyAdminsCanMessage &&
-        chatProvider.currentUserRole == 'member') {
-      setState(() {
-        _canSend = false;
-        _leftGroup = false;
-      });
-    } else {
-      setState(() {
-        _canSend = true;
-        _leftGroup = false;
-      });
-    }
-  }
-
   @override
   void dispose() {
-    context.read<ChatProvider>().stopListeningToMessages();
+    final chatProvider = context.read<ChatProvider>();
+    chatProvider.setActiveConversation(null);
+    chatProvider.stopListeningToMessages();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -100,18 +83,23 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty || _isSending || !_canSend) return;
+    if (text.isEmpty || _isSending) return;
 
-    final role = context.read<ChatProvider>().currentUserRole;
-    if (role.isEmpty) {
-      setState(() => _canSend = false);
-      return;
+    final chatProvider = context.read<ChatProvider>();
+    final conv = widget.conversation;
+
+    // Check sending permission
+    if (conv.isGroup) {
+      final role = chatProvider.currentUserRole;
+      if (role.isEmpty || (conv.onlyAdminsCanMessage && role == 'member')) {
+        return;
+      }
     }
 
     setState(() => _isSending = true);
     _messageController.clear();
 
-    final success = await context.read<ChatProvider>().sendMessage(
+    final success = await chatProvider.sendMessage(
       widget.conversationId,
       text,
     );
@@ -123,7 +111,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       } else {
         _messageController.text = text;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.read<ChatProvider>().error ?? 'Failed to send'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text(chatProvider.error ?? 'Failed to send'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -145,6 +136,27 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final conv = widget.conversation;
+    final chatProvider = context.watch<ChatProvider>();
+
+    bool canSend = true;
+    bool leftGroup = false;
+    bool isLoadingRole = false;
+
+    if (conv.isGroup) {
+      if (chatProvider.isRoleLoading) {
+        isLoadingRole = true;
+        canSend = false;
+      } else {
+        final role = chatProvider.currentUserRole;
+        if (role.isEmpty) {
+          canSend = false;
+          leftGroup = true;
+        } else if (conv.onlyAdminsCanMessage && role == 'member') {
+          canSend = false;
+          leftGroup = false;
+        }
+      }
+    }
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -183,7 +195,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   ),
                 );
                 if (confirmed == true && mounted) {
-                  await context.read<ChatProvider>().clearChat(widget.conversationId);
+                  await chatProvider.clearChat(widget.conversationId);
                 }
               }
             },
@@ -196,27 +208,35 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       body: Column(
         children: [
           Expanded(
-            child: Consumer<ChatProvider>(
-              builder: (context, chatProvider, _) {
-                if (chatProvider.isMessagesLoading) return const Center(child: CircularProgressIndicator());
-                if (chatProvider.messages.isEmpty) return const Center(child: Text('No messages yet.'));
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  itemCount: chatProvider.messages.length,
-                  itemBuilder: (context, index) {
-                    final message = chatProvider.messages[index];
-                    return MessageBubble(message: message, isMe: message.senderId == _currentUserId, isGroup: conv.isGroup);
-                  },
-                );
-              },
-            ),
+            child: chatProvider.isMessagesLoading && chatProvider.messages.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : chatProvider.messages.isEmpty
+                    ? const Center(child: Text('No messages yet.'))
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        itemCount: chatProvider.messages.length,
+                        itemBuilder: (context, index) {
+                          final message = chatProvider.messages[index];
+                          return MessageBubble(message: message, isMe: message.senderId == _currentUserId, isGroup: conv.isGroup);
+                        },
+                      ),
           ),
-          if (_canSend)
+          if (isLoadingRole)
+            const Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (canSend)
             MessageInputBar(controller: _messageController, isSending: _isSending, onSend: _sendMessage)
           else
-            Container(padding: const EdgeInsets.all(16), child: Text(_leftGroup ? 'You left this group' : 'Only admins can send messages', style: const TextStyle(fontStyle: FontStyle.italic))),
+            Container(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                leftGroup ? 'You left this group' : 'Only admins can send messages',
+                style: const TextStyle(fontStyle: FontStyle.italic),
+              ),
+            ),
         ],
       ),
     );
