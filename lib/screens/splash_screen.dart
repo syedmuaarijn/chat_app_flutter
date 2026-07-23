@@ -17,18 +17,17 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigate() async {
-    // Minimum splash display time
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (!mounted) return;
-
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     // AuthProvider._initAuth() runs on construction and may still be loading.
     // Wait for it to finish before we check isAuthenticated.
+    // Hard 10-second cap so we never hang on splash (e.g. Android offline with
+    // a stale token that causes setSession to time out).
     if (authProvider.isLoading) {
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
       await Future.doWhile(() async {
         await Future.delayed(const Duration(milliseconds: 50));
+        if (DateTime.now().isAfter(deadline)) return false; // break out
         return authProvider.isLoading;
       });
     }

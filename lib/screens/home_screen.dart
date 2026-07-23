@@ -5,6 +5,7 @@ import 'package:chat_app_flutter/screens/chat_room_screen.dart';
 import 'package:chat_app_flutter/screens/create_group_screen.dart';
 import 'package:chat_app_flutter/screens/new_chat_screen.dart';
 import 'package:chat_app_flutter/screens/settings_screen.dart';
+import 'package:chat_app_flutter/services/offline_service.dart';
 import 'package:chat_app_flutter/widgets/home/conversation_tile.dart';
 import 'package:chat_app_flutter/widgets/home/empty_state.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentTab = 0;
+  final OfflineService _offlineService = OfflineService();
 
   @override
   void initState() {
@@ -30,7 +32,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _load() {
     final chatProvider = context.read<ChatProvider>();
+    // Always load conversations (will use cache if offline)
     chatProvider.loadConversations();
+    // Only start listening if not already listening
     chatProvider.listenToConversations();
   }
 
@@ -57,7 +61,13 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     ).then((_) {
-      if (mounted) context.read<ChatProvider>().loadConversations();
+      // Only reload if we're online, otherwise keep cached data
+      if (!mounted) return;
+      _offlineService.hasConnection().then((isOnline) {
+        if (isOnline && mounted) {
+          context.read<ChatProvider>().loadConversations();
+        }
+      });
     });
   }
 
@@ -66,7 +76,12 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => const NewChatScreen()),
     ).then((_) {
-      if (mounted) context.read<ChatProvider>().loadConversations();
+      if (!mounted) return;
+      _offlineService.hasConnection().then((isOnline) {
+        if (isOnline && mounted) {
+          context.read<ChatProvider>().loadConversations();
+        }
+      });
     });
   }
 
@@ -75,7 +90,12 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
     ).then((_) {
-      if (mounted) context.read<ChatProvider>().loadConversations();
+      if (!mounted) return;
+      _offlineService.hasConnection().then((isOnline) {
+        if (isOnline && mounted) {
+          context.read<ChatProvider>().loadConversations();
+        }
+      });
     });
   }
 
@@ -84,10 +104,13 @@ class _HomeScreenState extends State<HomeScreen> {
       context,
       MaterialPageRoute(builder: (_) => const SettingsScreen()),
     ).then((_) {
-      if (mounted) {
-        context.read<ChatProvider>().loadConversations();
-        context.read<AuthProvider>().refreshUser();
-      }
+      if (!mounted) return;
+      _offlineService.hasConnection().then((isOnline) {
+        if (isOnline && mounted) {
+          context.read<ChatProvider>().loadConversations();
+          context.read<AuthProvider>().refreshUser();
+        }
+      });
     });
   }
 
@@ -135,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ? chatProvider.conversations.where((c) => !c.isGroup).toList()
               : chatProvider.conversations.where((c) => c.isGroup).toList();
 
-          if (chatProvider.isConversationsLoading && chatProvider.conversations.isEmpty) {
+          if (!chatProvider.initialLoadDone) {
             return const Center(child: CircularProgressIndicator());
           }
           if (conversations.isEmpty) {

@@ -14,6 +14,13 @@ class MessageModel {
 
   final bool isSystemMessage;
 
+  final String type; // 'text', 'image', 'video', 'audio', 'document'
+  final String? mediaUrl;
+  final String? fileName;
+  final int? fileSize;
+  final int? audioDuration;
+  final bool isForwarded;
+
   String? senderUsername;
   String? senderAvatarUrl;
 
@@ -37,6 +44,12 @@ class MessageModel {
     this.senderUsername,
     this.senderAvatarUrl,
     this.isSystemMessage = false,
+    this.type = 'text',
+    this.mediaUrl,
+    this.fileName,
+    this.fileSize,
+    this.audioDuration,
+    this.isForwarded = false,
   });
 
   factory MessageModel.fromJson(Map<String, dynamic> json) {
@@ -53,10 +66,22 @@ class MessageModel {
       updatedAt: json['updated_at'] != null
           ? DateTime.parse(json['updated_at'] as String)
           : DateTime.now(),
-      deletedFor: (json['deleted_for'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      deletedFor:
+          (json['deleted_for'] as List?)?.map((e) => e.toString()).toList() ??
+          const [],
       senderUsername: json['sender_username'] as String?,
       senderAvatarUrl: json['sender_avatar_url'] as String?,
       isSystemMessage: (json['is_system_message'] as bool?) ?? false,
+      type: (json['type'] as String?) ?? 'text',
+      mediaUrl: json['media_url'] as String?,
+      fileName: json['file_name'] as String?,
+      fileSize: json['file_size'] != null
+          ? (json['file_size'] as num).toInt()
+          : null,
+      audioDuration: json['audio_duration'] != null
+          ? (json['audio_duration'] as num).toInt()
+          : null,
+      isForwarded: (json['is_forwarded'] as bool?) ?? false,
     );
   }
 
@@ -72,6 +97,12 @@ class MessageModel {
       'updated_at': updatedAt.toIso8601String(),
       'deleted_for': deletedFor,
       'is_system_message': isSystemMessage,
+      'type': type,
+      'media_url': mediaUrl,
+      'file_name': fileName,
+      'file_size': fileSize,
+      'audio_duration': audioDuration,
+      'is_forwarded': isForwarded,
     };
   }
 
@@ -88,6 +119,12 @@ class MessageModel {
     String? senderUsername,
     String? senderAvatarUrl,
     bool? isSystemMessage,
+    String? type,
+    String? mediaUrl,
+    String? fileName,
+    int? fileSize,
+    int? audioDuration,
+    bool? isForwarded,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -102,6 +139,12 @@ class MessageModel {
       senderUsername: senderUsername ?? this.senderUsername,
       senderAvatarUrl: senderAvatarUrl ?? this.senderAvatarUrl,
       isSystemMessage: isSystemMessage ?? this.isSystemMessage,
+      type: type ?? this.type,
+      mediaUrl: mediaUrl ?? this.mediaUrl,
+      fileName: fileName ?? this.fileName,
+      fileSize: fileSize ?? this.fileSize,
+      audioDuration: audioDuration ?? this.audioDuration,
+      isForwarded: isForwarded ?? this.isForwarded,
     );
   }
 

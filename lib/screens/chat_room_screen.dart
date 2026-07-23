@@ -1,6 +1,10 @@
+import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chat_app_flutter/models/conversation_model.dart';
+import 'package:chat_app_flutter/models/message_model.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/group_info_screen.dart';
+import 'package:chat_app_flutter/screens/contact_info_screen.dart';
 import 'package:chat_app_flutter/widgets/chat/message_bubble.dart';
 import 'package:chat_app_flutter/widgets/chat/message_input_bar.dart';
 import 'package:flutter/material.dart';
@@ -28,8 +32,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       Supabase.instance.client.auth.currentUser?.id ?? '';
 
   bool _isSending = false;
-  bool _isBlockStatusLoading = false;
   bool _isBlockedByMe = false;
+  bool _roleLoaded = false;
 
   @override
   void initState() {
@@ -39,29 +43,37 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     });
   }
 
-  Future<void> _initChat() async {
+  void _initChat() {
     final chatProvider = context.read<ChatProvider>();
     chatProvider.clearMessages();
     chatProvider.clearGroupParticipants();
     chatProvider.setActiveConversation(widget.conversationId);
-    if (!widget.conversation.isGroup && widget.conversation.otherUser != null) {
-      setState(() => _isBlockStatusLoading = true);
-      _isBlockedByMe = await chatProvider.isCurrentUserBlocking(
-        widget.conversation.otherUser!.id,
-      );
-      if (mounted) setState(() => _isBlockStatusLoading = false);
-    }
+    
+    // Set scroll callback for auto-scroll after cache loads
+    chatProvider.setScrollToBottomCallback(_scrollToBottom);
     
     // Begin listening to real-time message stream
     chatProvider.listenToMessages(widget.conversationId);
-    
-    // Load initial list of messages
-    await chatProvider.loadMessages(widget.conversationId);
+
+    // Load messages immediately (cache loads instantly, network refreshes in background)
+    chatProvider.loadMessages(widget.conversationId);
+
+    // Load block status and group role in background without blocking UI
+    if (!widget.conversation.isGroup && widget.conversation.otherUser != null) {
+      chatProvider.isCurrentUserBlocking(widget.conversation.otherUser!.id).then((isBlocked) {
+        if (mounted) {
+          setState(() => _isBlockedByMe = isBlocked);
+        }
+      });
+    }
 
     if (widget.conversation.isGroup) {
-      await chatProvider.loadCurrentUserRole(widget.conversationId);
+      chatProvider.loadCurrentUserRole(widget.conversationId).then((_) {
+        if (mounted) {
+          setState(() => _roleLoaded = true);
+        }
+      });
     }
-    _scrollToBottom();
   }
 
   @override
@@ -69,6 +81,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final chatProvider = context.read<ChatProvider>();
     chatProvider.setActiveConversation(null);
     chatProvider.stopListeningToMessages();
+    chatProvider.setScrollToBottomCallback(null); // Clear callback to prevent memory leak
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -108,10 +121,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     setState(() => _isSending = true);
     _messageController.clear();
 
-    final success = await chatProvider.sendMessage(
-      widget.conversationId,
-      text,
-    );
+    final success = await chatProvider.sendMessage(widget.conversationId, text);
 
     if (mounted) {
       setState(() => _isSending = false);
@@ -122,6 +132,132 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         _showSendErrorDialog(chatProvider.error ?? 'Failed to send message.');
       }
     }
+  }
+
+  Future<void> _sendMediaMessage({
+    required String filePath,
+    required String fileName,
+    required int fileSize,
+    required String type,
+    String? caption,
+    int? audioDuration,
+  }) async {
+    if (_isSending) return;
+
+    final chatProvider = context.read<ChatProvider>();
+    setState(() => _isSending = true);
+
+    final success = await chatProvider.sendMediaMessage(
+      conversationId: widget.conversationId,
+      filePath: filePath,
+      fileName: fileName,
+      fileSize: fileSize,
+      type: type,
+      caption: caption,
+      audioDuration: audioDuration,
+    );
+
+    if (mounted) {
+      setState(() => _isSending = false);
+      if (success) {
+        _scrollToBottom(animated: true);
+      } else {
+        _showSendErrorDialog(
+          chatProvider.error ?? 'Failed to send media message.',
+        );
+      }
+    }
+  }
+
+  Future<void> _sendVoiceMessage({
+    required String filePath,
+    required String fileName,
+    required int fileSize,
+    required int durationSeconds,
+  }) async {
+    try {
+      await _sendMediaMessage(
+        filePath: filePath,
+        fileName: fileName,
+        fileSize: fileSize,
+        type: 'voice',
+        caption: '',
+        audioDuration: durationSeconds,
+      );
+    } finally {
+      final recording = File(filePath);
+      if (await recording.exists()) await recording.delete();
+    }
+  }
+
+  Future<void> _forwardMessage(MessageModel message) async {
+    final chatProvider = context.read<ChatProvider>();
+    final targets = chatProvider.conversations
+        .where((conversation) => conversation.id != widget.conversationId)
+        .toList();
+
+    if (targets.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Start another chat or group before forwarding.'),
+        ),
+      );
+      return;
+    }
+
+    final target = await showModalBottomSheet<ConversationModel>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetContext).size.height * 0.6,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Forward to',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: targets.length,
+                  itemBuilder: (_, index) {
+                    final conversation = targets[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        child: Text(conversation.displayInitial),
+                      ),
+                      title: Text(conversation.displayName),
+                      subtitle: Text(conversation.isGroup ? 'Group' : 'Chat'),
+                      onTap: () => Navigator.pop(sheetContext, conversation),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted || target == null) return;
+    final success = await chatProvider.forwardMessage(
+      conversationId: target.id,
+      message: message,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          success
+              ? 'Message forwarded to ${target.displayName}'
+              : (chatProvider.error ?? 'Could not forward message'),
+        ),
+        backgroundColor: success ? null : Colors.red,
+      ),
+    );
   }
 
   Future<void> _showSendErrorDialog(String message) {
@@ -152,6 +288,29 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
   }
 
+  Future<void> _openContactInfo() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ContactInfoScreen(conversation: widget.conversation),
+      ),
+    );
+    if (mounted) {
+      final chatProvider = context.read<ChatProvider>();
+      final otherUser = widget.conversation.otherUser;
+      if (otherUser != null) {
+        final isBlocked = await chatProvider.isCurrentUserBlocking(
+          otherUser.id,
+        );
+        if (mounted) {
+          setState(() {
+            _isBlockedByMe = isBlocked;
+          });
+        }
+      }
+    }
+  }
+
   Future<void> _toggleBlock() async {
     final otherUser = widget.conversation.otherUser;
     if (otherUser == null) return;
@@ -180,22 +339,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       if (confirmed != true || !mounted) return;
     }
 
-    setState(() => _isBlockStatusLoading = true);
     final success = _isBlockedByMe
         ? await context.read<ChatProvider>().unblockUser(otherUser.id)
         : await context.read<ChatProvider>().blockUser(otherUser.id);
     if (!mounted) return;
 
-    setState(() {
-      _isBlockStatusLoading = false;
-      if (success) _isBlockedByMe = !_isBlockedByMe;
-    });
     if (success) {
+      setState(() => _isBlockedByMe = !_isBlockedByMe);
       await context.read<ChatProvider>().loadMessages(widget.conversationId);
-    } else if (!success) {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(context.read<ChatProvider>().error ?? 'Could not update block'),
+          content: Text(
+            context.read<ChatProvider>().error ?? 'Could not update block',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -210,21 +367,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
     bool canSend = true;
     bool leftGroup = false;
-    bool isLoadingRole = false;
 
     if (conv.isGroup) {
-      if (chatProvider.isRoleLoading) {
-        isLoadingRole = true;
+      final role = chatProvider.currentUserRole;
+      // Only restrict sending if role has loaded and indicates user can't send
+      // If role is empty (still loading), assume user can send (optimistic UI)
+      if (_roleLoaded && role.isEmpty) {
         canSend = false;
-      } else {
-        final role = chatProvider.currentUserRole;
-        if (role.isEmpty) {
-          canSend = false;
-          leftGroup = true;
-        } else if (conv.onlyAdminsCanMessage && role == 'member') {
-          canSend = false;
-          leftGroup = false;
-        }
+        leftGroup = true;
+      } else if (_roleLoaded && conv.onlyAdminsCanMessage && role == 'member') {
+        canSend = false;
+        leftGroup = false;
       }
     }
 
@@ -233,18 +386,29 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       appBar: AppBar(
         titleSpacing: 0,
         title: GestureDetector(
-          onTap: conv.isGroup ? _openGroupInfo : null,
+          onTap: conv.isGroup ? _openGroupInfo : _openContactInfo,
           child: Row(
             children: [
               CircleAvatar(
                 radius: 18,
                 backgroundColor: colorScheme.primaryContainer,
-                backgroundImage: conv.displayAvatar.isNotEmpty ? NetworkImage(conv.displayAvatar) : null,
-                child: conv.displayAvatar.isEmpty ? Text(conv.displayInitial) : null,
+                backgroundImage: conv.displayAvatar.isNotEmpty
+                    ? CachedNetworkImageProvider(conv.displayAvatar)
+                    : null,
+                child: conv.displayAvatar.isEmpty
+                    ? Text(conv.displayInitial)
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(conv.displayName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17), overflow: TextOverflow.ellipsis),
+                child: Text(
+                  conv.displayName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
@@ -259,10 +423,18 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                   context: context,
                   builder: (_) => AlertDialog(
                     title: const Text('Clear Chat?'),
-                    content: const Text('Are you sure you want to clear this chat for you?'),
+                    content: const Text(
+                      'Are you sure you want to clear this chat for you?',
+                    ),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                      TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Clear'),
+                      ),
                     ],
                   ),
                 );
@@ -285,31 +457,27 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       body: Column(
         children: [
           Expanded(
-            child: chatProvider.isMessagesLoading && chatProvider.messages.isEmpty
-                ? const Center(child: CircularProgressIndicator())
-                : chatProvider.messages.isEmpty
-                    ? const Center(child: Text('No messages yet.'))
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        itemCount: chatProvider.messages.length,
-                        itemBuilder: (context, index) {
-                          final message = chatProvider.messages[index];
-                          return MessageBubble(message: message, isMe: message.senderId == _currentUserId, isGroup: conv.isGroup);
-                        },
-                      ),
+            child: chatProvider.messages.isEmpty
+                ? const Center(child: Text('No messages yet.'))
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    itemCount: chatProvider.messages.length,
+                    itemBuilder: (context, index) {
+                      final message = chatProvider.messages[index];
+                      return MessageBubble(
+                        message: message,
+                        isMe: message.senderId == _currentUserId,
+                        isGroup: conv.isGroup,
+                        onForward: _forwardMessage,
+                      );
+                    },
+                  ),
           ),
-          if (isLoadingRole)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_isBlockStatusLoading)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_isBlockedByMe)
+          if (_isBlockedByMe)
             const Padding(
               padding: EdgeInsets.all(16),
               child: Text(
@@ -318,12 +486,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               ),
             )
           else if (canSend)
-            MessageInputBar(controller: _messageController, isSending: _isSending, onSend: _sendMessage)
+            MessageInputBar(
+              controller: _messageController,
+              isSending: _isSending,
+              onSend: _sendMessage,
+              onSendMedia: _sendMediaMessage,
+              onSendVoice: _sendVoiceMessage,
+            )
           else
             Container(
               padding: const EdgeInsets.all(16),
               child: Text(
-                leftGroup ? 'You left this group' : 'Only admins can send messages',
+                leftGroup
+                    ? 'You left this group'
+                    : 'Only admins can send messages',
                 style: const TextStyle(fontStyle: FontStyle.italic),
               ),
             ),

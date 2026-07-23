@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:chat_app_flutter/models/user_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -113,6 +114,39 @@ class SupabaseAuthService {
   //     UserAttributes(password: newPassword),
   //   );
   // }
+
+  Future<String> uploadAvatar(File file) async {
+    try {
+      final userId = currentUserId;
+      if (userId == null) throw Exception('No user logged in');
+
+      final fileExt = file.path.split('.').last;
+      final storagePath = 'user_avatars/${userId}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+
+      await _supabaseClient.storage
+          .from('avatars')
+          .upload(
+            storagePath,
+            file,
+            fileOptions: const FileOptions(cacheControl: '0', upsert: true),
+          );
+
+      final publicUrl = _supabaseClient.storage
+          .from('avatars')
+          .getPublicUrl(storagePath);
+
+      return publicUrl;
+    } on StorageException catch (e) {
+      if (e.message.contains('Bucket not found') || e.statusCode == 404) {
+        throw Exception(
+          'Storage bucket "avatars" not found. Please create this bucket in your Supabase dashboard at: https://supabase.com/dashboard/project/nfjlgqylmggppsxabtbd/storage',
+        );
+      }
+      throw Exception('Failed to upload profile picture: ${e.message}');
+    } catch (e) {
+      throw Exception('Failed to upload profile picture: $e');
+    }
+  }
 
   Future<UserModel?> getCurrentUserProfile() async {
     try {

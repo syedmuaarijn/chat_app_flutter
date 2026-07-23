@@ -1,9 +1,13 @@
+import 'dart:io';
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/chat_room_screen.dart';
+import 'package:chat_app_flutter/services/conversation_service.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class GroupInfoScreen extends StatefulWidget {
   final String conversationId;
@@ -29,6 +33,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   bool _isAdmin = false;
   String _groupName = '';
   String _groupDescription = '';
+  bool _isUploading = false;
 
   @override
   void initState() {
@@ -63,6 +68,71 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         _isCreator = chatProvider.currentUserRole == 'creator';
         _isAdmin = chatProvider.currentUserRole == 'admin' || _isCreator;
       });
+    }
+  }
+
+  Future<void> _pickAndUploadGroupImage() async {
+    final picker = ImagePicker();
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Photo Library'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Camera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    final pickedFile = await picker.pickImage(
+      source: source,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 85,
+    );
+
+    if (pickedFile == null) return;
+
+    setState(() => _isUploading = true);
+
+    try {
+      final file = File(pickedFile.path);
+      final conversationService = ConversationService();
+      final url = await conversationService.uploadGroupAvatar(widget.conversationId, file);
+      
+      if (!mounted) return;
+      final chatProvider = context.read<ChatProvider>();
+      final success = await chatProvider.updateGroupInfo(
+        conversationId: widget.conversationId,
+        avatarUrl: url,
+      );
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Group profile picture updated successfully!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update group image: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
     }
   }
 
@@ -189,7 +259,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                     radius: 28,
                     backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                     backgroundImage: participant.user?.avatarUrl.isNotEmpty == true
-                        ? NetworkImage(participant.user!.avatarUrl)
+                        ? CachedNetworkImageProvider(participant.user!.avatarUrl)
                         : null,
                     child: participant.user?.avatarUrl.isEmpty ?? true
                         ? Text(
@@ -598,6 +668,15 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     }
   }
 
+  void _showImageViewer(String imageUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _ImageViewerScreen(imageUrl: imageUrl),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -619,6 +698,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
           final activeCount = participants.length;
 
+          final updatedConv = chatProvider.conversations.firstWhere(
+            (c) => c.id == widget.conversationId,
+            orElse: () => widget.conversation,
+          );
+
           return SingleChildScrollView(
             child: Column(
               children: [
@@ -632,27 +716,50 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                       children: [
                         Stack(
                           children: [
-                            CircleAvatar(
-                              radius: 44,
-                              backgroundColor: colorScheme.primaryContainer,
-                              backgroundImage: widget.conversation.avatarUrl?.isNotEmpty == true
-                                  ? NetworkImage(widget.conversation.avatarUrl!)
-                                  : null,
-                              child: widget.conversation.avatarUrl?.isEmpty ?? true
-                                  ? Icon(Icons.group, size: 40, color: colorScheme.onPrimaryContainer)
-                                  : null,
+                            GestureDetector(
+                              onTap: updatedConv.avatarUrl?.isNotEmpty == true
+                                  ? () => _showImageViewer(updatedConv.avatarUrl!)
+                                  : (_isAdmin && !_isUploading ? _pickAndUploadGroupImage : null),
+                              child: CircleAvatar(
+                                radius: 44,
+                                backgroundColor: colorScheme.primaryContainer,
+                                backgroundImage: updatedConv.avatarUrl?.isNotEmpty == true
+                                    ? CachedNetworkImageProvider(updatedConv.avatarUrl!)
+                                    : null,
+                                child: updatedConv.avatarUrl?.isEmpty ?? true
+                                    ? Icon(Icons.group, size: 40, color: colorScheme.onPrimaryContainer)
+                                    : null,
+                              ),
                             ),
                             if (_isAdmin)
                               Positioned(
                                 bottom: 0,
                                 right: 0,
+                                child: GestureDetector(
+                                  onTap: _isUploading ? null : _pickAndUploadGroupImage,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.primary,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: colorScheme.surface, width: 1.5),
+                                    ),
+                                    child: Icon(Icons.camera_alt, size: 14, color: colorScheme.onPrimary),
+                                  ),
+                                ),
+                              ),
+                            if (_isUploading)
+                              Positioned.fill(
                                 child: Container(
-                                  padding: const EdgeInsets.all(4),
                                   decoration: BoxDecoration(
-                                    color: colorScheme.primary,
+                                    color: Colors.black.withValues(alpha: 0.4),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: Icon(Icons.edit, size: 16, color: colorScheme.onPrimary),
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                    ),
+                                  ),
                                 ),
                               ),
                           ],
@@ -702,33 +809,6 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                           style: TextStyle(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.w500,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // ── Media placeholder ──────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(Icons.photo_library_outlined, size: 36,
-                            color: colorScheme.onSurface.withValues(alpha: 0.3)),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Media, links, and docs',
-                          style: TextStyle(
-                            color: colorScheme.onSurface.withValues(alpha: 0.4),
                             fontSize: 14,
                           ),
                         ),
@@ -928,7 +1008,7 @@ class _ParticipantTile extends StatelessWidget {
         radius: 22,
         backgroundColor: colorScheme.primaryContainer,
         backgroundImage: user?.avatarUrl.isNotEmpty == true
-            ? NetworkImage(user!.avatarUrl)
+            ? CachedNetworkImageProvider(user!.avatarUrl)
             : null,
         child: user?.avatarUrl.isEmpty ?? true
             ? Text(
@@ -981,6 +1061,35 @@ class _ParticipantTile extends StatelessWidget {
               : null,
       trailing: const Icon(Icons.chevron_right, size: 20),
       onTap: onTap,
+    );
+  }
+}
+
+class _ImageViewerScreen extends StatelessWidget {
+  final String imageUrl;
+
+  const _ImageViewerScreen({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          minScale: 0.5,
+          maxScale: 4.0,
+          child: CachedNetworkImage(
+            imageUrl: imageUrl,
+            fit: BoxFit.contain,
+            errorWidget: (context, url, error) =>
+                const Icon(Icons.error, color: Colors.white, size: 64),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1046,7 +1155,7 @@ class _AddParticipantsSheetState extends State<_AddParticipantsSheet> {
                         leading: CircleAvatar(
                           backgroundColor: colorScheme.primaryContainer,
                           backgroundImage: user.avatarUrl.isNotEmpty
-                              ? NetworkImage(user.avatarUrl)
+                              ? CachedNetworkImageProvider(user.avatarUrl)
                               : null,
                           child: user.avatarUrl.isEmpty
                               ? Text(displayName[0].toUpperCase())

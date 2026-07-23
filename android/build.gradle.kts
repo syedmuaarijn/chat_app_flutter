@@ -23,6 +23,18 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// Some Android plugins still declare an older compile SDK.  Keep every Android
+// library aligned with the app so dependencies requiring API 36 can resolve.
+subprojects {
+    if (name != "app") {
+        afterEvaluate {
+            extensions.findByType<com.android.build.api.dsl.LibraryExtension>()?.apply {
+                compileSdk = 36
+            }
+        }
+    }
+}
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

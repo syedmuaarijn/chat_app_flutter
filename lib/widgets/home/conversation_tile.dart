@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/models/message_model.dart';
 import 'package:flutter/material.dart';
@@ -32,7 +33,7 @@ class ConversationTile extends StatelessWidget {
         radius: 26,
         backgroundColor: colorScheme.primaryContainer,
         backgroundImage: conv.displayAvatar.isNotEmpty
-            ? NetworkImage(conv.displayAvatar)
+            ? CachedNetworkImageProvider(conv.displayAvatar)
             : null,
         child: conv.displayAvatar.isEmpty
             ? Icon(

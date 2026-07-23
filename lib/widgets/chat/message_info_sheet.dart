@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class MessageInfoSheet extends StatelessWidget {
   final String messageId;
@@ -79,9 +80,6 @@ class MessageInfoSheet extends StatelessWidget {
               ),
 
               // ── Scrollable content ───────────────────────────────────────
-              // LimitedBox caps at 55% of screen height so the sheet never
-              // taller than that even when there is very little content.
-              // When content IS taller the inner ListView scrolls.
               LimitedBox(
                 maxHeight: MediaQuery.of(context).size.height * 0.55,
                 child: (readList.isEmpty && deliveredList.isEmpty)
@@ -214,7 +212,7 @@ class _UserRow extends StatelessWidget {
         backgroundColor: colorScheme.primaryContainer,
         backgroundImage:
             (avatarUrl != null && avatarUrl.isNotEmpty)
-                ? NetworkImage(avatarUrl)
+                ? CachedNetworkImageProvider(avatarUrl)
                 : null,
         child: (avatarUrl == null || avatarUrl.isEmpty)
             ? Text(initials,

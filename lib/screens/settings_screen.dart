@@ -1,6 +1,9 @@
+import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chat_app_flutter/providers/auth_provider.dart';
 import 'package:chat_app_flutter/providers/theme_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -17,6 +20,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TextEditingController _bioController;
   late TextEditingController _avatarUrlController;
   bool _isSaving = false;
+  bool _isUploading = false;
 
   final List<String> _presetAvatars = [
     'https://api.dicebear.com/7.x/adventurer/png?seed=Felix',
@@ -29,13 +33,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    final authProvider = context.read<AuthProvider>();
-    final user = authProvider.currentUser;
+    // Initialize controllers with empty strings; didChangeDependencies will
+    // fill them once AuthProvider has loaded the user (may be async from cache).
+    _usernameController = TextEditingController();
+    _fullNameController = TextEditingController();
+    _bioController = TextEditingController();
+    _avatarUrlController = TextEditingController();
+  }
 
-    _usernameController = TextEditingController(text: user?.username ?? '');
-    _fullNameController = TextEditingController(text: user?.fullName ?? '');
-    _bioController = TextEditingController(text: user?.bio ?? '');
-    _avatarUrlController = TextEditingController(text: user?.avatarUrl ?? '');
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Populate controllers as soon as the user is available (works both when
+    // the user is already loaded and when loaded later from cache).
+    // We use context.watch to reactively update when authProvider.currentUser changes.
+    final user = context.watch<AuthProvider>().currentUser;
+    if (user != null) {
+      _usernameController.text = user.username;
+      _fullNameController.text = user.fullName;
+      _bioController.text = user.bio;
+      _avatarUrlController.text = user.avatarUrl;
+    }
   }
 
   @override
@@ -72,6 +90,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Navigator.pop(context);
       }
     }
+  }
+
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Photo Library'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Camera'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
+    final pickedFile = await picker.pickImage(
+      source: source,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 85,
+    );
+
+    if (pickedFile == null) return;
+
+    setState(() => _isUploading = true);
+
+    try {
+      if (!mounted) return;
+      final authProvider = context.read<AuthProvider>();
+      final file = File(pickedFile.path);
+      final url = await authProvider.uploadAvatar(file);
+      
+      if (!mounted) return;
+      setState(() {
+        _avatarUrlController.text = url;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Image uploaded! Click Save to apply changes.')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to upload image: $e'), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUploading = false);
+      }
+    }
+  }
+
+  void _showImageViewer(String imageUrl) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => _ImageViewerScreen(imageUrl: imageUrl),
+      ),
+    );
   }
 
   @override
@@ -114,20 +200,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.all(20.0),
                     child: Column(
                       children: [
-                        CircleAvatar(
-                          radius: 50,
-                          backgroundColor: colorScheme.primaryContainer,
-                          backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
-                          child: avatarUrl.isEmpty
-                              ? Text(
-                                  initial,
-                                  style: TextStyle(
-                                    fontSize: 36,
-                                    fontWeight: FontWeight.bold,
-                                    color: colorScheme.onPrimaryContainer,
+                        Stack(
+                          children: [
+                            GestureDetector(
+                              onTap: avatarUrl.isNotEmpty ? () => _showImageViewer(avatarUrl) : null,
+                              child: CircleAvatar(
+                                radius: 50,
+                                backgroundColor: colorScheme.primaryContainer,
+                                backgroundImage: avatarUrl.isNotEmpty ? CachedNetworkImageProvider(avatarUrl) : null,
+                                child: avatarUrl.isEmpty
+                                    ? Text(
+                                        initial,
+                                        style: TextStyle(
+                                          fontSize: 36,
+                                          fontWeight: FontWeight.bold,
+                                          color: colorScheme.onPrimaryContainer,
+                                        ),
+                                      )
+                                    : null,
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: _isUploading ? null : _pickAndUploadImage,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primary,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: colorScheme.surface, width: 2),
                                   ),
-                                )
-                              : null,
+                                  child: Icon(
+                                    Icons.camera_alt,
+                                    size: 16,
+                                    color: colorScheme.onPrimary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (_isUploading)
+                              Positioned.fill(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.4),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -160,7 +287,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                                 child: CircleAvatar(
                                   radius: 20,
-                                  backgroundImage: NetworkImage(url),
+                                  backgroundImage: CachedNetworkImageProvider(url),
                                 ),
                               ),
                             );
@@ -313,6 +440,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageViewerScreen extends StatelessWidget {
+  final String imageUrl;
+
+  const _ImageViewerScreen({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Center(
+        child: InteractiveViewer(
+          minScale: 0.5,
+          maxScale: 4.0,
+          child: CachedNetworkImage(
+            imageUrl: imageUrl,
+            fit: BoxFit.contain,
+            errorWidget: (context, url, error) =>
+                const Icon(Icons.error, color: Colors.white, size: 64),
           ),
         ),
       ),

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/chat_room_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class CreateGroupScreen extends StatefulWidget {
   const CreateGroupScreen({super.key});
@@ -16,6 +19,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _searchController = TextEditingController();
   final Set<String> _selectedIds = {};
   bool _isCreating = false;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -27,6 +31,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _nameController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -106,16 +111,23 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
     return Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: const Text('New Group', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          'New Group',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         actions: [
           TextButton(
             onPressed: _isCreating ? null : _createGroup,
             child: _isCreating
                 ? const SizedBox(
-                    width: 18, height: 18,
+                    width: 18,
+                    height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Create', style: TextStyle(fontWeight: FontWeight.bold)),
+                : const Text(
+                    'Create',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
           ),
         ],
       ),
@@ -130,7 +142,10 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 CircleAvatar(
                   radius: 24,
                   backgroundColor: colorScheme.primaryContainer,
-                  child: Icon(Icons.group, color: colorScheme.onPrimaryContainer),
+                  child: Icon(
+                    Icons.group,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -173,16 +188,25 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                 hintText: 'Search users...',
                 prefixIcon: const Icon(Icons.search, size: 20),
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                  horizontal: 12,
+                ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
                 filled: true,
-                fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                fillColor: colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.5,
+                ),
               ),
               onChanged: (query) {
-                context.read<ChatProvider>().searchUsers(query.trim());
+                _searchDebounce?.cancel();
+                _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+                  if (mounted)
+                    context.read<ChatProvider>().searchUsers(query.trim());
+                });
               },
             ),
           ),
@@ -199,7 +223,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                   return Center(
                     child: Text(
                       'No users found',
-                      style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.4)),
+                      style: TextStyle(
+                        color: colorScheme.onSurface.withValues(alpha: 0.4),
+                      ),
                     ),
                   );
                 }
@@ -215,20 +241,27 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                         radius: 20,
                         backgroundColor: colorScheme.primaryContainer,
                         backgroundImage: user.avatarUrl.isNotEmpty
-                            ? NetworkImage(user.avatarUrl)
+                            ? CachedNetworkImageProvider(user.avatarUrl)
                             : null,
                         child: user.avatarUrl.isEmpty
                             ? Text(
                                 user.fullName.isNotEmpty
                                     ? user.fullName[0].toUpperCase()
                                     : user.username[0].toUpperCase(),
-                                style: TextStyle(color: colorScheme.onPrimaryContainer),
+                                style: TextStyle(
+                                  color: colorScheme.onPrimaryContainer,
+                                ),
                               )
                             : null,
                       ),
                       title: Text(
-                        user.fullName.isNotEmpty ? user.fullName : user.username,
-                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                        user.fullName.isNotEmpty
+                            ? user.fullName
+                            : user.username,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 15,
+                        ),
                       ),
                       subtitle: Text(
                         '@${user.username}',
@@ -239,7 +272,10 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
                       ),
                       trailing: isSelected
                           ? Icon(Icons.check_circle, color: colorScheme.primary)
-                          : Icon(Icons.circle_outlined, color: colorScheme.outline),
+                          : Icon(
+                              Icons.circle_outlined,
+                              color: colorScheme.outline,
+                            ),
                       onTap: () => _toggleSelection(user.id),
                     );
                   },

@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/models/user_model.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/chat_room_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class NewChatScreen extends StatefulWidget {
   const NewChatScreen({super.key});
@@ -15,6 +18,7 @@ class NewChatScreen extends StatefulWidget {
 class _NewChatScreenState extends State<NewChatScreen> {
   final _searchController = TextEditingController();
   bool _hasSearched = false;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -27,12 +31,16 @@ class _NewChatScreenState extends State<NewChatScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
   void _onSearchChanged(String query) {
-    context.read<ChatProvider>().searchUsers(query.trim());
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) context.read<ChatProvider>().searchUsers(query.trim());
+    });
   }
 
   Future<void> _openChat(UserModel user) async {
@@ -139,10 +147,7 @@ class _NewChatScreenState extends State<NewChatScreen> {
                   itemCount: chatProvider.users.length,
                   itemBuilder: (context, index) {
                     final user = chatProvider.users[index];
-                    return _UserTile(
-                      user: user,
-                      onTap: () => _openChat(user),
-                    );
+                    return _UserTile(user: user, onTap: () => _openChat(user));
                   },
                 );
               },
@@ -162,8 +167,9 @@ class _EmptyUsers extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final muted =
-        Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4);
+    final muted = Theme.of(
+      context,
+    ).colorScheme.onSurface.withValues(alpha: 0.4);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -188,8 +194,9 @@ class _UserTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final displayName =
-        user.fullName.isNotEmpty ? user.fullName : user.username;
+    final displayName = user.fullName.isNotEmpty
+        ? user.fullName
+        : user.username;
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
 
     return ListTile(
@@ -197,8 +204,9 @@ class _UserTile extends StatelessWidget {
       leading: CircleAvatar(
         radius: 24,
         backgroundColor: colorScheme.primaryContainer,
-        backgroundImage:
-            user.avatarUrl.isNotEmpty ? NetworkImage(user.avatarUrl) : null,
+        backgroundImage: user.avatarUrl.isNotEmpty
+            ? CachedNetworkImageProvider(user.avatarUrl)
+            : null,
         child: user.avatarUrl.isEmpty
             ? Text(
                 initial,

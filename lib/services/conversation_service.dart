@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/models/message_model.dart';
 import 'package:chat_app_flutter/models/user_model.dart';
@@ -31,7 +32,10 @@ class ConversationService {
     }
   }
 
-  Future<void> saveDeletedConversation(String conversationId, DateTime deletedAt) async {
+  Future<void> saveDeletedConversation(
+    String conversationId,
+    DateTime deletedAt,
+  ) async {
     final userId = currentUserId;
     if (userId == null) return;
     try {
@@ -50,19 +54,19 @@ class ConversationService {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      final convId = await _supabaseClient
-          .rpc('get_or_create_conversation', params: {
-            'other_user_id': otherUserId,
-          });
+      final convId = await _supabaseClient.rpc(
+        'get_or_create_conversation',
+        params: {'other_user_id': otherUserId},
+      );
 
       final existingConvId = convId as String;
 
       final deletedConvs = await getDeletedConversations();
       if (deletedConvs.containsKey(existingConvId)) {
-        final newConvData = await _supabaseClient
-            .rpc('create_fresh_conversation', params: {
-              'other_user_id': otherUserId,
-            });
+        final newConvData = await _supabaseClient.rpc(
+          'create_fresh_conversation',
+          params: {'other_user_id': otherUserId},
+        );
         return newConvData as String;
       }
 
@@ -77,94 +81,25 @@ class ConversationService {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      final participantData = await _supabaseClient
+      final participantFuture = _supabaseClient
           .from('conversation_participants')
           .select('conversation_id')
           .eq('user_id', currentUser)
           .eq('status', 'active');
+      final deletedFuture = getDeletedConversations();
+      final participantData = await participantFuture;
+      final deletedConvs = await deletedFuture;
 
-      final List<ConversationModel> conversations = [];
-      final deletedConvs = await getDeletedConversations();
-
-      for (var participant in participantData) {
-        try {
-          final conversationId = participant['conversation_id'] as String;
-          final deletedAtStr = deletedConvs[conversationId];
-          final deletedAt = deletedAtStr != null ? DateTime.parse(deletedAtStr) : null;
-
-          final conversationData = await _supabaseClient
-              .from('conversations')
-              .select()
-              .eq('id', conversationId)
-              .single();
-
-          var conversation = ConversationModel.fromJson(conversationData);
-
-          if (conversation.isGroup) {
-            try {
-              final countQuery = _supabaseClient
-                  .from('conversation_participants')
-                  .select('id')
-                  .eq('conversation_id', conversationId)
-                  .eq('status', 'active');
-              final countResponse = await countQuery.count(CountOption.exact);
-              final participantCount = countResponse.count;
-              conversation = conversation.copyWith(
-                participantCount: participantCount,
-              );
-            } catch (_) {
-            }
-          } else {
-            final otherUserData = await _supabaseClient
-                .from('conversation_participants')
-                .select('user_id, profiles(*)')
-                .eq('conversation_id', conversationId)
-                .neq('user_id', currentUser)
-                .single();
-
-            conversation.otherUser = UserModel.fromJson(
-                otherUserData['profiles'] as Map<String, dynamic>);
-          }
-
-          final lastMessageData = await _supabaseClient
-              .from('messages')
-              .select()
-              .eq('conversation_id', conversationId)
-              .order('created_at', ascending: false)
-              .limit(1);
-
-          MessageModel? lastMsg;
-          if ((lastMessageData as List).isNotEmpty) {
-            lastMsg = MessageModel.fromJson(lastMessageData.first);
-          }
-
-          if (deletedAt != null) {
-            if (lastMsg == null || lastMsg.createdAt.isBefore(deletedAt) || lastMsg.createdAt.isAtSameMomentAs(deletedAt)) {
-              continue;
-            }
-          }
-
-          conversation.lastMessage = lastMsg;
-
-          var unreadQuery = _supabaseClient
-              .from('messages')
-              .select('id')
-              .eq('conversation_id', conversationId)
-              .eq('is_read', false)
-              .neq('sender_id', currentUser);
-
-          if (deletedAt != null) {
-            unreadQuery = unreadQuery.gt('created_at', deletedAt.toIso8601String());
-          }
-
-          final unreadData = await unreadQuery.count(CountOption.exact);
-          conversation.unreadCount = unreadData.count;
-
-          conversations.add(conversation);
-        } catch (e) {
-          debugPrint('⚠️ Skipping conversation $participant: $e');
-        }
-      }
+      final loaded = await Future.wait(
+        (participantData as List).map(
+          (participant) => _loadConversation(
+            conversationId: participant['conversation_id'] as String,
+            currentUserId: currentUser,
+            deletedAt: deletedConvs[participant['conversation_id'] as String],
+          ),
+        ),
+      );
+      final conversations = loaded.whereType<ConversationModel>().toList();
 
       conversations.sort((a, b) {
         final bTime = b.lastMessage?.createdAt ?? b.updatedAt ?? b.createdAt;
@@ -178,6 +113,87 @@ class ConversationService {
     }
   }
 
+  Future<ConversationModel?> _loadConversation({
+    required String conversationId,
+    required String currentUserId,
+    required String? deletedAt,
+  }) async {
+    try {
+      var unreadQuery = _supabaseClient
+          .from('messages')
+          .select('id')
+          .eq('conversation_id', conversationId)
+          .eq('is_read', false)
+          .neq('sender_id', currentUserId);
+      if (deletedAt != null) {
+        unreadQuery = unreadQuery.gt('created_at', deletedAt);
+      }
+
+      final requests = await Future.wait<dynamic>([
+        _supabaseClient
+            .from('conversations')
+            .select()
+            .eq('id', conversationId)
+            .single()
+            .then((value) => value),
+        _supabaseClient
+            .from('messages')
+            .select()
+            .eq('conversation_id', conversationId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .then((value) => value),
+        unreadQuery
+            .count(CountOption.exact)
+            .then((value) => value),
+      ]);
+
+      var conversation = ConversationModel.fromJson(
+        requests[0] as Map<String, dynamic>,
+      );
+      final lastMessageRows = requests[1] as List;
+      final lastMessage = lastMessageRows.isEmpty
+          ? null
+          : MessageModel.fromJson(
+              lastMessageRows.first as Map<String, dynamic>,
+            );
+      final deletedAtValue = deletedAt == null
+          ? null
+          : DateTime.parse(deletedAt);
+      if (deletedAtValue != null &&
+          (lastMessage == null ||
+              !lastMessage.createdAt.isAfter(deletedAtValue))) {
+        return null;
+      }
+      conversation.lastMessage = lastMessage;
+      conversation.unreadCount = (requests[2] as PostgrestResponse).count;
+
+      if (conversation.isGroup) {
+        final count = await _supabaseClient
+            .from('conversation_participants')
+            .select('id')
+            .eq('conversation_id', conversationId)
+            .eq('status', 'active')
+            .count(CountOption.exact);
+        conversation = conversation.copyWith(participantCount: count.count);
+      } else {
+        final otherUser = await _supabaseClient
+            .from('conversation_participants')
+            .select('profiles(*)')
+            .eq('conversation_id', conversationId)
+            .neq('user_id', currentUserId)
+            .single();
+        conversation.otherUser = UserModel.fromJson(
+          otherUser['profiles'] as Map<String, dynamic>,
+        );
+      }
+      return conversation;
+    } catch (e) {
+      debugPrint('Skipping conversation $conversationId: $e');
+      return null;
+    }
+  }
+
   Future<String> createGroup({
     required String name,
     String description = '',
@@ -188,28 +204,33 @@ class ConversationService {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      final convId = await _supabaseClient.rpc('create_group_conversation', params: {
-        'creator_id': currentUser,
-        'group_name': name,
-        'group_description': description,
-        'group_avatar_url': avatarUrl,
-        'member_ids': memberIds,
-      });
+      final convId = await _supabaseClient.rpc(
+        'create_group_conversation',
+        params: {
+          'creator_id': currentUser,
+          'group_name': name,
+          'group_description': description,
+          'group_avatar_url': avatarUrl,
+          'member_ids': memberIds,
+        },
+      );
       return convId as String;
     } catch (e) {
       throw Exception('Failed to create group: $e');
     }
   }
 
-  Future<List<ParticipantInfo>> getGroupParticipants(String conversationId) async {
+  Future<List<ParticipantInfo>> getGroupParticipants(
+    String conversationId,
+  ) async {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      final data = await _supabaseClient
-          .rpc('get_group_participants', params: {
-            'conv_id': conversationId,
-          });
+      final data = await _supabaseClient.rpc(
+        'get_group_participants',
+        params: {'conv_id': conversationId},
+      );
 
       return (data as List).map((json) {
         final p = ParticipantInfo(
@@ -256,31 +277,43 @@ class ConversationService {
     }
   }
 
-  Future<void> addGroupParticipants(String conversationId, List<String> userIds) async {
+  Future<void> addGroupParticipants(
+    String conversationId,
+    List<String> userIds,
+  ) async {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      await _supabaseClient.rpc('add_group_participants', params: {
-        'conv_id': conversationId,
-        'caller_id': currentUser,
-        'new_member_ids': userIds,
-      });
+      await _supabaseClient.rpc(
+        'add_group_participants',
+        params: {
+          'conv_id': conversationId,
+          'caller_id': currentUser,
+          'new_member_ids': userIds,
+        },
+      );
     } catch (e) {
       throw Exception('Failed to add participants: $e');
     }
   }
 
-  Future<void> removeGroupParticipant(String conversationId, String targetUserId) async {
+  Future<void> removeGroupParticipant(
+    String conversationId,
+    String targetUserId,
+  ) async {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      await _supabaseClient.rpc('remove_group_participant', params: {
-        'conv_id': conversationId,
-        'caller_id': currentUser,
-        'target_id': targetUserId,
-      });
+      await _supabaseClient.rpc(
+        'remove_group_participant',
+        params: {
+          'conv_id': conversationId,
+          'caller_id': currentUser,
+          'target_id': targetUserId,
+        },
+      );
     } catch (e) {
       throw Exception('Failed to remove participant: $e');
     }
@@ -291,40 +324,52 @@ class ConversationService {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      await _supabaseClient.rpc('leave_group', params: {
-        'conv_id': conversationId,
-        'leaving_user_id': currentUser,
-      });
+      await _supabaseClient.rpc(
+        'leave_group',
+        params: {'conv_id': conversationId, 'leaving_user_id': currentUser},
+      );
     } catch (e) {
       throw Exception('Failed to leave group: $e');
     }
   }
 
-  Future<void> promoteToAdmin(String conversationId, String targetUserId) async {
+  Future<void> promoteToAdmin(
+    String conversationId,
+    String targetUserId,
+  ) async {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      await _supabaseClient.rpc('promote_to_admin', params: {
-        'conv_id': conversationId,
-        'caller_id': currentUser,
-        'target_id': targetUserId,
-      });
+      await _supabaseClient.rpc(
+        'promote_to_admin',
+        params: {
+          'conv_id': conversationId,
+          'caller_id': currentUser,
+          'target_id': targetUserId,
+        },
+      );
     } catch (e) {
       throw Exception('Failed to promote: $e');
     }
   }
 
-  Future<void> demoteFromAdmin(String conversationId, String targetUserId) async {
+  Future<void> demoteFromAdmin(
+    String conversationId,
+    String targetUserId,
+  ) async {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      await _supabaseClient.rpc('demote_from_admin', params: {
-        'conv_id': conversationId,
-        'caller_id': currentUser,
-        'target_id': targetUserId,
-      });
+      await _supabaseClient.rpc(
+        'demote_from_admin',
+        params: {
+          'conv_id': conversationId,
+          'caller_id': currentUser,
+          'target_id': targetUserId,
+        },
+      );
     } catch (e) {
       throw Exception('Failed to demote: $e');
     }
@@ -343,12 +388,47 @@ class ConversationService {
         'conv_id': conversationId,
         'caller_id': currentUser,
       };
-      if (onlyAdminsCanMessage != null) params['new_only_admins_can_message'] = onlyAdminsCanMessage;
-      if (onlyAdminsCanEditInfo != null) params['new_only_admins_can_edit_info'] = onlyAdminsCanEditInfo;
+      if (onlyAdminsCanMessage != null)
+        params['new_only_admins_can_message'] = onlyAdminsCanMessage;
+      if (onlyAdminsCanEditInfo != null)
+        params['new_only_admins_can_edit_info'] = onlyAdminsCanEditInfo;
 
       await _supabaseClient.rpc('update_group_settings', params: params);
     } catch (e) {
       throw Exception('Failed to update group settings: $e');
+    }
+  }
+
+  Future<String> uploadGroupAvatar(String conversationId, File file) async {
+    try {
+      final currentUser = currentUserId;
+      if (currentUser == null) throw Exception('No user logged in');
+
+      final fileExt = file.path.split('.').last;
+      final storagePath = '$conversationId/group_avatar_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+
+      await _supabaseClient.storage
+          .from('chat-attachments')
+          .upload(
+            storagePath,
+            file,
+            fileOptions: const FileOptions(cacheControl: '0', upsert: true),
+          );
+
+      final publicUrl = _supabaseClient.storage
+          .from('chat-attachments')
+          .getPublicUrl(storagePath);
+
+      return publicUrl;
+    } on StorageException catch (e) {
+      if (e.message.contains('Bucket not found') || e.statusCode == 404) {
+        throw Exception(
+          'Storage bucket "chat-attachments" not found. Please create this bucket in your Supabase dashboard at: https://supabase.com/dashboard/project/nfjlgqylmggppsxabtbd/storage',
+        );
+      }
+      throw Exception('Failed to upload group profile picture: ${e.message}');
+    } catch (e) {
+      throw Exception('Failed to upload group profile picture: $e');
     }
   }
 
@@ -376,16 +456,22 @@ class ConversationService {
     }
   }
 
-  Future<void> transferOwnership(String conversationId, String newCreatorId) async {
+  Future<void> transferOwnership(
+    String conversationId,
+    String newCreatorId,
+  ) async {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      await _supabaseClient.rpc('transfer_ownership', params: {
-        'conv_id': conversationId,
-        'caller_id': currentUser,
-        'new_creator_id': newCreatorId,
-      });
+      await _supabaseClient.rpc(
+        'transfer_ownership',
+        params: {
+          'conv_id': conversationId,
+          'caller_id': currentUser,
+          'new_creator_id': newCreatorId,
+        },
+      );
     } catch (e) {
       throw Exception('Failed to transfer ownership: $e');
     }
@@ -396,10 +482,10 @@ class ConversationService {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
 
-      await _supabaseClient.rpc('delete_group', params: {
-        'conv_id': conversationId,
-        'caller_id': currentUser,
-      });
+      await _supabaseClient.rpc(
+        'delete_group',
+        params: {'conv_id': conversationId, 'caller_id': currentUser},
+      );
     } catch (e) {
       throw Exception('Failed to delete group: $e');
     }
@@ -409,9 +495,10 @@ class ConversationService {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
-      final data = await _supabaseClient.rpc('search_visible_profiles', params: {
-        'search_term': query,
-      });
+      final data = await _supabaseClient.rpc(
+        'search_visible_profiles',
+        params: {'search_term': query},
+      );
       return (data as List).map((json) => UserModel.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to search users: $e');
@@ -422,9 +509,10 @@ class ConversationService {
     try {
       final currentUser = currentUserId;
       if (currentUser == null) throw Exception('No user logged in');
-      final data = await _supabaseClient.rpc('search_visible_profiles', params: {
-        'search_term': '',
-      });
+      final data = await _supabaseClient.rpc(
+        'search_visible_profiles',
+        params: {'search_term': ''},
+      );
       return (data as List).map((json) => UserModel.fromJson(json)).toList();
     } catch (e) {
       throw Exception('Failed to get users: $e');

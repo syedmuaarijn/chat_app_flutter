@@ -7,7 +7,8 @@ plugins {
 
 android {
     namespace = "com.example.chat_app_flutter"
-    compileSdk = flutter.compileSdkVersion
+    // file_picker's Android lifecycle dependency requires API level 36.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
