@@ -1,5 +1,6 @@
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/providers/auth_provider.dart';
+import 'package:chat_app_flutter/screens/ai_chat_screen.dart';
 import 'package:chat_app_flutter/providers/call_provider.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/chat_room_screen.dart';
@@ -119,6 +120,13 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  void _openAiChat() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const AiChatScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -133,6 +141,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         automaticallyImplyLeading: false,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.auto_awesome_outlined),
+            tooltip: 'Ask Nova',
+            onPressed: _openAiChat,
+          ),
           if (_currentTab == 0)
             IconButton(
               icon: const Icon(Icons.person_add_outlined),

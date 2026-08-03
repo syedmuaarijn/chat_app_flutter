@@ -1,5 +1,6 @@
 import 'package:chat_app_flutter/config/supabase_config.dart';
 import 'package:chat_app_flutter/providers/auth_provider.dart';
+import 'package:chat_app_flutter/providers/ai_chat_provider.dart';
 import 'package:chat_app_flutter/providers/call_provider.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/forgot_password_screen.dart';
@@ -43,6 +44,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => AiChatProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(
           create: (_) {
