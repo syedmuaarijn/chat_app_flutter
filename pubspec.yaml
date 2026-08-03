@@ -61,6 +61,7 @@ dependencies:
   record: ^6.1.2
   just_audio: ^0.10.5
   agora_rtc_engine: 6.5.3
+  flutter_ringtone_player: ^4.0.0+4
 
 dev_dependencies:
   flutter_test:

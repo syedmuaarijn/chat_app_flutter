@@ -49,7 +49,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     chatProvider.clearMessages();
     chatProvider.clearGroupParticipants();
     chatProvider.setActiveConversation(widget.conversationId);
-    
+
     // Set scroll callback for auto-scroll after cache loads
     chatProvider.setScrollToBottomCallback(_scrollToBottom);
 
@@ -61,11 +61,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
     // Load block status and group role in background without blocking UI
     if (!widget.conversation.isGroup && widget.conversation.otherUser != null) {
-      chatProvider.isCurrentUserBlocking(widget.conversation.otherUser!.id).then((isBlocked) {
-        if (mounted) {
-          setState(() => _isBlockedByMe = isBlocked);
-        }
-      });
+      chatProvider
+          .isCurrentUserBlocking(widget.conversation.otherUser!.id)
+          .then((isBlocked) {
+            if (mounted) {
+              setState(() => _isBlockedByMe = isBlocked);
+            }
+          });
     }
 
     if (widget.conversation.isGroup) {
@@ -82,7 +84,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     final chatProvider = context.read<ChatProvider>();
     chatProvider.setActiveConversation(null);
     chatProvider.stopListeningToMessages();
-    chatProvider.setScrollToBottomCallback(null); // Clear callback to prevent memory leak
+    chatProvider.setScrollToBottomCallback(
+      null,
+    ); // Clear callback to prevent memory leak
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -385,6 +389,31 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  Future<void> _startVideoCall() async {
+    final otherUser = widget.conversation.otherUser;
+    if (otherUser == null || widget.conversation.isGroup) return;
+    final callProvider = context.read<CallProvider>();
+    final started = await callProvider.startVideoCall(
+      conversationId: widget.conversationId,
+      remoteUserId: otherUser.id,
+      remoteUserName: widget.conversation.displayName,
+      remoteUserAvatarUrl: widget.conversation.displayAvatar,
+    );
+    if (!mounted) return;
+    if (started) {
+      Navigator.pushNamed(context, '/video-call');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            callProvider.lastError ?? 'Could not start the video call.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -478,11 +507,18 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
               const PopupMenuItem(value: 'clear', child: Text('Clear Chat')),
             ],
           ),
-          IconButton(
-            icon: const Icon(Icons.phone_rounded),
-            tooltip: 'Voice Call',
-            onPressed: () => _startVoiceCall(),
-          ),
+          if (!conv.isGroup) ...[
+            IconButton(
+              icon: const Icon(Icons.videocam_rounded),
+              tooltip: 'Video Call',
+              onPressed: _startVideoCall,
+            ),
+            IconButton(
+              icon: const Icon(Icons.phone_rounded),
+              tooltip: 'Voice Call',
+              onPressed: _startVoiceCall,
+            ),
+          ],
         ],
       ),
       body: Column(

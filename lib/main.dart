@@ -11,6 +11,7 @@ import 'package:chat_app_flutter/screens/signup_screen.dart';
 import 'package:chat_app_flutter/screens/splash_screen.dart';
 import 'package:chat_app_flutter/widgets/calling/call_screen.dart';
 import 'package:chat_app_flutter/widgets/calling/incoming_call_dialog.dart';
+import 'package:chat_app_flutter/widgets/calling/video_call_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -101,8 +102,10 @@ class MyApp extends StatelessWidget {
               ),
               elevatedButtonTheme: ElevatedButtonThemeData(
                 style: ElevatedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 16,
+                    horizontal: 32,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12.0),
                   ),
@@ -122,7 +125,9 @@ class MyApp extends StatelessWidget {
               '/resetPassword': (context) => const ResetPasswordScreen(),
               '/home': (context) => const HomeScreen(),
               '/call': (context) => const CallScreen(),
+              '/video-call': (context) => const VideoCallScreen(),
               '/incoming-call': (context) => const IncomingCallScreen(),
+              '/incoming-video-call': (context) => const IncomingCallScreen(),
             },
             // NOTE: The builder overlay for IncomingCallDialog has been REMOVED.
             // Incoming calls are now navigated to '/incoming-call' as a proper route

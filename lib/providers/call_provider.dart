@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:chat_app_flutter/services/agora_call_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_ringtone_player/flutter_ringtone_player.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
@@ -18,6 +19,10 @@ class CallProvider with ChangeNotifier {
   String? _remoteUserAvatarUrl;
   bool _isMicMuted = false;
   bool _isSpeakerphone = false;
+  CallMode _callMode = CallMode.audio;
+  bool _isCameraMuted = false;
+  int? _remoteUid;
+  bool _isRemoteVideoPaused = false;
   bool _hasRemotePeerJoined = false;
   bool _isIncoming = false;
   String? _lastError;
@@ -39,9 +44,8 @@ class CallProvider with ChangeNotifier {
   // Agora channel IDs are limited to 64 bytes. A pair of UUIDs joined with a
   // colon is 73 bytes and Agora rejects it with error -102. The session UUID
   // is already unique for every call, so it is sufficient as the RTC channel.
-  String? get _agoraChannelName => _currentCallSessionId == null
-      ? null
-      : 'call_$_currentCallSessionId';
+  String? get _agoraChannelName =>
+      _currentCallSessionId == null ? null : 'call_$_currentCallSessionId';
 
   Timer? _ringtoneTimer;
 
@@ -54,8 +58,14 @@ class CallProvider with ChangeNotifier {
   String? get remoteUserId => _remoteUserId;
   String? get remoteUserName => _remoteUserName;
   String? get remoteUserAvatarUrl => _remoteUserAvatarUrl;
+  String? get agoraChannelName => _agoraChannelName;
   bool get isMicMuted => _isMicMuted;
   bool get isSpeakerphone => _isSpeakerphone;
+  CallMode get callMode => _callMode;
+  bool get isVideoCall => _callMode == CallMode.video;
+  bool get isCameraMuted => _isCameraMuted;
+  int? get remoteUid => _remoteUid;
+  bool get isRemoteVideoPaused => _isRemoteVideoPaused;
   bool get isIncoming => _isIncoming;
   int get callDurationSeconds => _callDurationSeconds;
   String? get lastError => _lastError;
@@ -77,6 +87,7 @@ class CallProvider with ChangeNotifier {
     required String remoteUserId,
     required String remoteUserName,
     required String remoteUserAvatarUrl,
+    CallMode mode = CallMode.audio,
   }) async {
     if (_status != CallStatus.idle) {
       debugPrint('CallProvider: startCall ignored — already in a call');
@@ -92,6 +103,10 @@ class CallProvider with ChangeNotifier {
     _isIncoming = false;
     _isMicMuted = false;
     _isSpeakerphone = false;
+    _callMode = mode;
+    _isCameraMuted = false;
+    _remoteUid = null;
+    _isRemoteVideoPaused = false;
     _callDurationSeconds = 0;
     _lastError = null;
     _status = CallStatus.ringing;
@@ -102,18 +117,29 @@ class CallProvider with ChangeNotifier {
       // The invitation is the source of truth for the incoming-call UI. Send
       // it before joining Agora so an RTC/token failure cannot make the call
       // silently disappear before the recipient is notified.
-      await _agoraService.invite(_signalConversationId!, remoteUserId);
-      inviteSent = true;
-
-      // Initialize Agora & register callbacks before joining.
-      await _agoraService.initialize();
+      // Request all required media permissions before notifying the recipient.
+      // This prevents a video invite from ringing if the caller cannot use camera.
+      await _agoraService.initialize(mode: _callMode);
       _registerAgoraCallbacks();
+
+      await _agoraService.invite(
+        _signalConversationId!,
+        remoteUserId,
+        _callMode,
+      );
+      inviteSent = true;
+      _createCallHistory();
 
       // Play outgoing ringing tone (fire and forget, do not await)
       _playRingtone(outgoing: true);
 
       // Caller joins channel so audio is ready when recipient accepts
-      await _agoraService.joinChannel(_agoraChannelName!);
+      await _agoraService.joinChannel(
+        channelName: _agoraChannelName!,
+        conversationId: _conversationId!,
+        sessionId: _currentCallSessionId!,
+        mode: _callMode,
+      );
       return true;
     } catch (e) {
       debugPrint('CallProvider: startCall error: $e');
@@ -124,7 +150,11 @@ class CallProvider with ChangeNotifier {
       // start.
       if (inviteSent) {
         try {
-          await _agoraService.endCall(_signalConversationId!, remoteUserId);
+          await _agoraService.endCall(
+            _signalConversationId!,
+            remoteUserId,
+            _callMode,
+          );
         } catch (signalError) {
           debugPrint('CallProvider: failed to cancel invite: $signalError');
         }
@@ -133,6 +163,19 @@ class CallProvider with ChangeNotifier {
       return false;
     }
   }
+
+  Future<bool> startVideoCall({
+    required String conversationId,
+    required String remoteUserId,
+    required String remoteUserName,
+    required String remoteUserAvatarUrl,
+  }) => startCall(
+    conversationId: conversationId,
+    remoteUserId: remoteUserId,
+    remoteUserName: remoteUserName,
+    remoteUserAvatarUrl: remoteUserAvatarUrl,
+    mode: CallMode.video,
+  );
 
   // ── Accept incoming call ───────────────────────────────────────────────────
   Future<void> acceptCall() async {
@@ -149,12 +192,22 @@ class CallProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      await _agoraService.initialize();
+      await _agoraService.initialize(mode: _callMode);
       _registerAgoraCallbacks();
-      await _agoraService.joinChannel(_agoraChannelName!);
+      await _agoraService.joinChannel(
+        channelName: _agoraChannelName!,
+        conversationId: _conversationId!,
+        sessionId: _currentCallSessionId!,
+        mode: _callMode,
+      );
 
       // Notify caller that we accepted
-      await _agoraService.accept(_signalConversationId!, _remoteUserId!);
+      await _agoraService.accept(
+        _signalConversationId!,
+        _remoteUserId!,
+        _callMode,
+      );
+      _markCallAccepted();
 
       // Start timer immediately (caller may already be in channel)
       _startDurationTimer();
@@ -172,7 +225,11 @@ class CallProvider with ChangeNotifier {
     _incomingCallTimeoutTimer?.cancel();
 
     try {
-      await _agoraService.decline(_signalConversationId!, _remoteUserId!);
+      await _agoraService.decline(
+        _signalConversationId!,
+        _remoteUserId!,
+        _callMode,
+      );
     } catch (e) {
       debugPrint('CallProvider: declineCall signal error: $e');
     }
@@ -193,7 +250,7 @@ class CallProvider with ChangeNotifier {
 
     if (signalConversationId != null && remoteId != null) {
       try {
-        await _agoraService.endCall(signalConversationId, remoteId);
+        await _agoraService.endCall(signalConversationId, remoteId, _callMode);
       } catch (e) {
         debugPrint('CallProvider: endCall signal error: $e');
       }
@@ -213,6 +270,18 @@ class CallProvider with ChangeNotifier {
     _isSpeakerphone = !_isSpeakerphone;
     await _agoraService.toggleSpeaker(_isSpeakerphone);
     notifyListeners();
+  }
+
+  Future<void> toggleCamera() async {
+    if (!isVideoCall) return;
+    _isCameraMuted = !_isCameraMuted;
+    await _agoraService.muteCamera(_isCameraMuted);
+    notifyListeners();
+  }
+
+  Future<void> switchCamera() async {
+    if (!isVideoCall || _isCameraMuted) return;
+    await _agoraService.switchCamera();
   }
 
   // ── Duration timer ─────────────────────────────────────────────────────────
@@ -268,6 +337,7 @@ class CallProvider with ChangeNotifier {
         final newRecord = payload.newRecord;
         final rawConversationId = newRecord['conversation_id'] as String? ?? '';
         final signalType = newRecord['signal_type'] as String? ?? '';
+        final callType = newRecord['call_type'] as String? ?? 'audio';
         final callerId = newRecord['caller_id'] as String? ?? '';
         final createdAtStr = newRecord['created_at'] as String? ?? '';
 
@@ -312,7 +382,11 @@ class CallProvider with ChangeNotifier {
 
         switch (signalType) {
           case 'invite':
-            _handleIncomingInvite(conversationId, callerId);
+            _handleIncomingInvite(
+              conversationId,
+              callerId,
+              callType == 'video' ? CallMode.video : CallMode.audio,
+            );
             break;
           case 'accept':
             _handleCallAccepted();
@@ -341,7 +415,11 @@ class CallProvider with ChangeNotifier {
   }
 
   // ── Signal handlers ────────────────────────────────────────────────────────
-  void _handleIncomingInvite(String conversationId, String callerId) async {
+  void _handleIncomingInvite(
+    String conversationId,
+    String callerId,
+    CallMode mode,
+  ) async {
     // Ignore if already in a call
     if (_status != CallStatus.idle) {
       debugPrint(
@@ -374,6 +452,10 @@ class CallProvider with ChangeNotifier {
       _isIncoming = true;
       _isMicMuted = false;
       _isSpeakerphone = false;
+      _callMode = mode;
+      _isCameraMuted = false;
+      _remoteUid = null;
+      _isRemoteVideoPaused = false;
       _callDurationSeconds = 0;
       _status = CallStatus.ringing;
       notifyListeners();
@@ -385,7 +467,9 @@ class CallProvider with ChangeNotifier {
       startIncomingCallTimeout();
 
       // Navigate to incoming call screen
-      navigatorKey?.currentState?.pushNamed('/incoming-call');
+      navigatorKey?.currentState?.pushNamed(
+        mode == CallMode.video ? '/incoming-video-call' : '/incoming-call',
+      );
     } catch (e) {
       debugPrint('CallProvider: error handling invite: $e');
       _resetState();
@@ -410,6 +494,7 @@ class CallProvider with ChangeNotifier {
     _stopDurationTimer();
     _incomingCallTimeoutTimer?.cancel();
 
+    await _finishCallHistory();
     await _agoraService.dispose();
     _resetState();
     _status = CallStatus.ended;
@@ -434,6 +519,8 @@ class CallProvider with ChangeNotifier {
     _agoraService.onRemoteUserJoined = (uid) {
       debugPrint('CallProvider: remote user joined Agora uid=$uid');
       _hasRemotePeerJoined = true;
+      _remoteUid = uid;
+      _isRemoteVideoPaused = false;
       if (_status == CallStatus.ringing && !_isIncoming) {
         // Caller: recipient joined the channel
         _stopRingtone();
@@ -473,6 +560,10 @@ class CallProvider with ChangeNotifier {
       debugPrint('CallProvider: ⚠️ Agora token expiring — renewing...');
       _renewToken();
     };
+    _agoraService.onRemoteVideoPaused = (paused) {
+      _isRemoteVideoPaused = paused;
+      notifyListeners();
+    };
   }
 
   /// Renews the Agora token when it is about to expire mid-call.
@@ -482,7 +573,13 @@ class CallProvider with ChangeNotifier {
     try {
       final response = await Supabase.instance.client.functions.invoke(
         'generate-agora-token',
-        body: {'channelName': channelName, 'uid': 0},
+        body: {
+          'channelName': channelName,
+          'conversationId': _conversationId,
+          'sessionId': _currentCallSessionId,
+          'callType': _callMode.name,
+          'uid': 0,
+        },
       );
       if (response.status == 200) {
         final data = response.data as Map<String, dynamic>;
@@ -503,6 +600,7 @@ class CallProvider with ChangeNotifier {
     _incomingCallTimeoutTimer?.cancel();
     _endedAutoClearTimer?.cancel();
 
+    await _finishCallHistory();
     await _agoraService.dispose();
     _resetState();
     _status = CallStatus.ended;
@@ -529,9 +627,61 @@ class CallProvider with ChangeNotifier {
     _remoteUserAvatarUrl = null;
     _isMicMuted = false;
     _isSpeakerphone = false;
+    _callMode = CallMode.audio;
+    _isCameraMuted = false;
+    _remoteUid = null;
+    _isRemoteVideoPaused = false;
     _hasRemotePeerJoined = false;
     _isIncoming = false;
     _callDurationSeconds = 0;
+  }
+
+  Future<void> _createCallHistory() async {
+    try {
+      await Supabase.instance.client.from('call_history').insert({
+        'session_id': _currentCallSessionId,
+        'conversation_id': _conversationId,
+        'caller_id': Supabase.instance.client.auth.currentUser?.id,
+        'receiver_id': _remoteUserId,
+        'call_type': _callMode.name,
+        'status': 'ringing',
+      });
+    } catch (e) {
+      debugPrint('Call history create failed: $e');
+    }
+  }
+
+  Future<void> _markCallAccepted() async {
+    try {
+      await Supabase.instance.client
+          .from('call_history')
+          .update({
+            'status': 'active',
+            'accepted_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('session_id', _currentCallSessionId!);
+    } catch (e) {
+      debugPrint('Call history accept failed: $e');
+    }
+  }
+
+  Future<void> _finishCallHistory() async {
+    final sessionId = _currentCallSessionId;
+    if (sessionId == null) return;
+    try {
+      await Supabase.instance.client
+          .from('call_history')
+          .update({
+            'status': _hasRemotePeerJoined
+                ? 'completed'
+                : (_isIncoming ? 'missed' : 'cancelled'),
+            'ended_at': DateTime.now().toUtc().toIso8601String(),
+            'duration_seconds': _callDurationSeconds,
+          })
+          .eq('session_id', sessionId);
+    } catch (e) {
+      debugPrint('Call history finish failed: $e');
+    }
   }
 
   String _callFailureMessage(Object error) {
@@ -551,12 +701,13 @@ class CallProvider with ChangeNotifier {
   // ── Ringtone ───────────────────────────────────────────────────────────────
   Future<void> _playRingtone({required bool outgoing}) async {
     _stopRingtone();
-
-    // A system alert is reliable on both platforms. The previous remote MP3
-    // URLs started returning HTTP 403 and produced noisy ExoPlayer errors.
     void playAlert() {
       if (_status == CallStatus.ringing) {
-        SystemSound.play(SystemSoundType.alert);
+        if (outgoing) {
+          SystemSound.play(SystemSoundType.alert);
+        } else {
+          FlutterRingtonePlayer().playRingtone(looping: false, asAlarm: false);
+        }
       } else {
         _stopRingtone();
       }
@@ -571,6 +722,7 @@ class CallProvider with ChangeNotifier {
   void _stopRingtone() {
     _ringtoneTimer?.cancel();
     _ringtoneTimer = null;
+    FlutterRingtonePlayer().stop();
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────────

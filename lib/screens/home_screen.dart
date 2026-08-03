@@ -7,6 +7,7 @@ import 'package:chat_app_flutter/screens/chat_room_screen.dart';
 import 'package:chat_app_flutter/screens/create_group_screen.dart';
 import 'package:chat_app_flutter/screens/new_chat_screen.dart';
 import 'package:chat_app_flutter/screens/settings_screen.dart';
+import 'package:chat_app_flutter/screens/calls_screen.dart';
 import 'package:chat_app_flutter/services/offline_service.dart';
 import 'package:chat_app_flutter/widgets/home/conversation_tile.dart';
 import 'package:chat_app_flutter/widgets/home/empty_state.dart';
@@ -136,7 +137,9 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: Text(
-          _currentTab == 0 ? 'Messages' : 'Groups',
+          _currentTab == 0
+              ? 'Messages'
+              : (_currentTab == 1 ? 'Groups' : 'Calls'),
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
         automaticallyImplyLeading: false,
@@ -170,94 +173,113 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Consumer<ChatProvider>(
-        builder: (context, chatProvider, _) {
-          final conversations = _currentTab == 0
-              ? chatProvider.conversations.where((c) => !c.isGroup).toList()
-              : chatProvider.conversations.where((c) => c.isGroup).toList();
+      body: _currentTab == 2
+          ? const CallsScreen()
+          : Consumer<ChatProvider>(
+              builder: (context, chatProvider, _) {
+                final conversations = _currentTab == 0
+                    ? chatProvider.conversations
+                          .where((c) => !c.isGroup)
+                          .toList()
+                    : chatProvider.conversations
+                          .where((c) => c.isGroup)
+                          .toList();
 
-          if (!chatProvider.initialLoadDone) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (conversations.isEmpty) {
-            return EmptyConversations(
-              icon: _currentTab == 0 ? Icons.chat_bubble_outline_rounded : Icons.group_outlined,
-              message: _currentTab == 0
-                  ? 'No conversations yet.\nStart a new chat!'
-                  : 'No groups yet.\nCreate a group!',
-            );
-          }
+                if (!chatProvider.initialLoadDone) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (conversations.isEmpty) {
+                  return EmptyConversations(
+                    icon: _currentTab == 0
+                        ? Icons.chat_bubble_outline_rounded
+                        : Icons.group_outlined,
+                    message: _currentTab == 0
+                        ? 'No conversations yet.\nStart a new chat!'
+                        : 'No groups yet.\nCreate a group!',
+                  );
+                }
 
-          return RefreshIndicator(
-            onRefresh: () => chatProvider.loadConversations(),
-            child: ListView.separated(
-              itemCount: conversations.length,
-              separatorBuilder: (_, _) => Divider(
-                height: 1,
-                indent: 72,
-                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-              ),
-              itemBuilder: (context, index) {
-                final conversation = conversations[index];
+                return RefreshIndicator(
+                  onRefresh: () => chatProvider.loadConversations(),
+                  child: ListView.separated(
+                    itemCount: conversations.length,
+                    separatorBuilder: (_, _) => Divider(
+                      height: 1,
+                      indent: 72,
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                    ),
+                    itemBuilder: (context, index) {
+                      final conversation = conversations[index];
 
-                return Dismissible(
-                  key: Key(conversation.id),
-                  direction: DismissDirection.endToStart,
-                  background: Container(
-                    color: Colors.red,
-                    alignment: Alignment.centerRight,
-                    padding: const EdgeInsets.only(right: 20),
-                    child: const Icon(Icons.delete, color: Colors.white),
-                  ),
-                  confirmDismiss: (direction) async {
-                    return await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Delete Chat?'),
-                        content: const Text(
-                            'This will delete all messages in this conversation permanently for you.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancel'),
-                          ),
-                          TextButton(
-                            style: TextButton.styleFrom(foregroundColor: Colors.red),
-                            onPressed: () => Navigator.pop(context, true),
-                            child: const Text('Delete'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                  onDismissed: (direction) async {
-                    final success =
-                        await chatProvider.deleteConversation(conversation.id);
-                    if (!success && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(
-                                chatProvider.error ?? 'Failed to delete conversation')),
+                      return Dismissible(
+                        key: Key(conversation.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          color: Colors.red,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        confirmDismiss: (direction) async {
+                          return await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Delete Chat?'),
+                              content: const Text(
+                                'This will delete all messages in this conversation permanently for you.',
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () =>
+                                      Navigator.pop(context, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.red,
+                                  ),
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Delete'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        onDismissed: (direction) async {
+                          final success = await chatProvider.deleteConversation(
+                            conversation.id,
+                          );
+                          if (!success && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  chatProvider.error ??
+                                      'Failed to delete conversation',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        child: ConversationTile(
+                          conversation: conversation,
+                          onTap: () => _openConversation(conversation),
+                        ),
                       );
-                    }
-                  },
-                  child: ConversationTile(
-                    conversation: conversation,
-                    onTap: () => _openConversation(conversation),
+                    },
                   ),
                 );
               },
             ),
-          );
-        },
-      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentTab,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: [
           NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline_rounded, color: labelColor),
-            selectedIcon: Icon(Icons.chat_bubble_rounded, color: colorScheme.primary),
+            selectedIcon: Icon(
+              Icons.chat_bubble_rounded,
+              color: colorScheme.primary,
+            ),
             label: 'Chats',
           ),
           NavigationDestination(
@@ -266,13 +288,18 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'Groups',
           ),
           NavigationDestination(
+            icon: Icon(Icons.call_outlined, color: labelColor),
+            selectedIcon: Icon(Icons.call, color: colorScheme.primary),
+            label: 'Calls',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.settings_outlined, color: labelColor),
             selectedIcon: Icon(Icons.settings, color: colorScheme.primary),
             label: 'Settings',
           ),
         ],
         onDestinationSelected: (index) {
-          if (index == 2) {
+          if (index == 3) {
             _openSettings();
           } else {
             setState(() => _currentTab = index);

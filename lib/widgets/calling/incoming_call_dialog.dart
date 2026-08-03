@@ -1,4 +1,3 @@
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chat_app_flutter/providers/call_provider.dart';
 import 'package:flutter/material.dart';
@@ -45,8 +44,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
     final status = _callProvider.status;
     // If the call ends or is accepted (and we navigated to /call), pop this screen
     if (status == CallStatus.ended || status == CallStatus.idle) {
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
+      final navigator = _callProvider.navigatorKey?.currentState;
+      if (navigator?.canPop() ?? false) {
+        navigator!.pop();
       }
     }
   }
@@ -61,15 +61,17 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
   Future<void> _onAccept() async {
     final callProvider = context.read<CallProvider>();
     // Pop incoming screen first, then push call screen
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) _callProvider.navigatorKey?.currentState?.pop();
     await callProvider.acceptCall();
     // Navigate to active call screen
-    callProvider.navigatorKey?.currentState?.pushNamed('/call');
+    callProvider.navigatorKey?.currentState?.pushNamed(
+      callProvider.isVideoCall ? '/video-call' : '/call',
+    );
   }
 
   Future<void> _onDecline() async {
     final callProvider = context.read<CallProvider>();
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) _callProvider.navigatorKey?.currentState?.pop();
     await callProvider.declineCall();
   }
 
@@ -91,20 +93,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF0A0A1A),
-                Color(0xFF0D1B2A),
-                Color(0xFF1A1035),
-              ],
+              colors: [Color(0xFF0A0A1A), Color(0xFF0D1B2A), Color(0xFF1A1035)],
             ),
           ),
           child: SafeArea(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildTopSection(),
-                _buildBottomControls(),
-              ],
+              children: [_buildTopSection(), _buildBottomControls()],
             ),
           ),
         ),
@@ -124,8 +119,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
               color: Colors.white.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: const Text(
-              'Incoming Voice Call',
+            child: Text(
+              context.read<CallProvider>().isVideoCall
+                  ? 'Incoming Video Call'
+                  : 'Incoming Voice Call',
               style: TextStyle(
                 color: Colors.white70,
                 fontSize: 13,
@@ -138,10 +135,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
           AnimatedBuilder(
             animation: _pulseAnim,
             builder: (context, child) {
-              return Transform.scale(
-                scale: _pulseAnim.value,
-                child: child,
-              );
+              return Transform.scale(scale: _pulseAnim.value, child: child);
             },
             child: Consumer<CallProvider>(
               builder: (context, callProvider, _) {
@@ -190,7 +184,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen>
       child: CircleAvatar(
         radius: 60,
         backgroundColor: const Color(0xFF2A2A4A),
-        backgroundImage: hasAvatar ? CachedNetworkImageProvider(avatarUrl) : null,
+        backgroundImage: hasAvatar
+            ? CachedNetworkImageProvider(avatarUrl)
+            : null,
         child: hasAvatar
             ? null
             : const Icon(Icons.person, size: 60, color: Colors.white54),
@@ -279,16 +275,17 @@ class _RingingDotsState extends State<_RingingDots>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          setState(() => _dotCount = (_dotCount % 3) + 1);
-          _controller.reset();
-          _controller.forward();
-        }
-      });
+    _controller =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 600),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed) {
+            setState(() => _dotCount = (_dotCount % 3) + 1);
+            _controller.reset();
+            _controller.forward();
+          }
+        });
     _controller.forward();
   }
 
