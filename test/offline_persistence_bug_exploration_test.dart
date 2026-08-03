@@ -144,7 +144,7 @@ void _bug1Tests() {
                 'isAuthenticated should be TRUE when Hive has a valid session '
                 'and current_user entry. COUNTEREXAMPLE: isAuthenticated = false '
                 'because Map<dynamic,dynamic> cast fails in _loadUserFromCache().');
-        expect(restoredUser!.id, equals('user-1'));
+        expect(restoredUser.id, equals('user-1'));
         expect(restoredUser.username, equals('testuser'));
       },
     );

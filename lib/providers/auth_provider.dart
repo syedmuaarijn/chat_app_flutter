@@ -308,6 +308,7 @@ class AuthProvider with ChangeNotifier {
   Future<void> refreshUser() async {
     try {
       _currentUser = await _authService.getCurrentUserProfile();
+      await _cacheCurrentUser();
       notifyListeners();
     } catch (e) {
       _error = e.toString();

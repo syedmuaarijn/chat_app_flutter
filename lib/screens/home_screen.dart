@@ -1,5 +1,6 @@
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/providers/auth_provider.dart';
+import 'package:chat_app_flutter/providers/call_provider.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/chat_room_screen.dart';
 import 'package:chat_app_flutter/screens/create_group_screen.dart';
@@ -36,11 +37,15 @@ class _HomeScreenState extends State<HomeScreen> {
     chatProvider.loadConversations();
     // Only start listening if not already listening
     chatProvider.listenToConversations();
+
+    // Start listening for incoming call signals
+    context.read<CallProvider>().listenToCallSignals();
   }
 
   @override
   void dispose() {
     context.read<ChatProvider>().stopListeningToConversations();
+    context.read<CallProvider>().stopListeningToCallSignals();
     super.dispose();
   }
 

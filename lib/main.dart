@@ -1,5 +1,6 @@
 import 'package:chat_app_flutter/config/supabase_config.dart';
 import 'package:chat_app_flutter/providers/auth_provider.dart';
+import 'package:chat_app_flutter/providers/call_provider.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/forgot_password_screen.dart';
 import 'package:chat_app_flutter/screens/home_screen.dart';
@@ -7,6 +8,8 @@ import 'package:chat_app_flutter/screens/login_screen.dart';
 import 'package:chat_app_flutter/screens/reset_password_screen.dart';
 import 'package:chat_app_flutter/screens/signup_screen.dart';
 import 'package:chat_app_flutter/screens/splash_screen.dart';
+import 'package:chat_app_flutter/widgets/calling/call_screen.dart';
+import 'package:chat_app_flutter/widgets/calling/incoming_call_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -14,14 +17,17 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'package:chat_app_flutter/providers/theme_provider.dart';
 
+/// Global navigator key — allows CallProvider to navigate without a BuildContext.
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Hive for local storage
   await Hive.initFlutter();
   await Hive.openBox('authBox');
   await Hive.openBox('chatCache');
-  
+
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
     publishableKey: SupabaseConfig.supabasePublishableKey,
@@ -38,6 +44,14 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
+        ChangeNotifierProvider(
+          create: (_) {
+            final provider = CallProvider();
+            // Inject the global navigator key so CallProvider can navigate
+            provider.navigatorKey = appNavigatorKey;
+            return provider;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: Consumer<ThemeProvider>(
@@ -45,6 +59,8 @@ class MyApp extends StatelessWidget {
           return MaterialApp(
             title: 'Chat App',
             debugShowCheckedModeBanner: false,
+            // Use the global navigator key so CallProvider can push routes
+            navigatorKey: appNavigatorKey,
             theme: ThemeData(
               colorScheme: ColorScheme.fromSeed(
                 seedColor: Colors.blue,
@@ -83,7 +99,8 @@ class MyApp extends StatelessWidget {
               ),
               elevatedButtonTheme: ElevatedButtonThemeData(
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12.0),
                   ),
@@ -102,7 +119,12 @@ class MyApp extends StatelessWidget {
               '/forgotPassword': (context) => const ForgotPasswordScreen(),
               '/resetPassword': (context) => const ResetPasswordScreen(),
               '/home': (context) => const HomeScreen(),
+              '/call': (context) => const CallScreen(),
+              '/incoming-call': (context) => const IncomingCallScreen(),
             },
+            // NOTE: The builder overlay for IncomingCallDialog has been REMOVED.
+            // Incoming calls are now navigated to '/incoming-call' as a proper route
+            // from CallProvider._handleIncomingInvite(), eliminating the touch-blocking bug.
           );
         },
       ),

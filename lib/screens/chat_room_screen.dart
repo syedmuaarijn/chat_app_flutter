@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/models/message_model.dart';
+import 'package:chat_app_flutter/providers/call_provider.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/group_info_screen.dart';
 import 'package:chat_app_flutter/screens/contact_info_screen.dart';
@@ -51,7 +52,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     
     // Set scroll callback for auto-scroll after cache loads
     chatProvider.setScrollToBottomCallback(_scrollToBottom);
-    
+
     // Begin listening to real-time message stream
     chatProvider.listenToMessages(widget.conversationId);
 
@@ -359,6 +360,31 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  Future<void> _startVoiceCall() async {
+    final otherUser = widget.conversation.otherUser;
+    if (otherUser == null) return;
+
+    final callProvider = context.read<CallProvider>();
+    final started = await callProvider.startCall(
+      conversationId: widget.conversationId,
+      remoteUserId: otherUser.id,
+      remoteUserName: widget.conversation.displayName,
+      remoteUserAvatarUrl: widget.conversation.displayAvatar,
+    );
+
+    if (!mounted) return;
+    if (started) {
+      Navigator.pushNamed(context, '/call');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(callProvider.lastError ?? 'Could not start the call.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -451,6 +477,11 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 ),
               const PopupMenuItem(value: 'clear', child: Text('Clear Chat')),
             ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.phone_rounded),
+            tooltip: 'Voice Call',
+            onPressed: () => _startVoiceCall(),
           ),
         ],
       ),

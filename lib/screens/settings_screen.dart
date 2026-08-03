@@ -44,15 +44,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Populate controllers as soon as the user is available (works both when
-    // the user is already loaded and when loaded later from cache).
-    // We use context.watch to reactively update when authProvider.currentUser changes.
+    // Populate controllers only once — when they are still empty.
+    // This avoids overwriting user-edited values (e.g., after
+    // uploading a new avatar or selecting a preset) every time
+    // the widget rebuilds due to provider notifications.
     final user = context.watch<AuthProvider>().currentUser;
     if (user != null) {
-      _usernameController.text = user.username;
-      _fullNameController.text = user.fullName;
-      _bioController.text = user.bio;
-      _avatarUrlController.text = user.avatarUrl;
+      if (_usernameController.text.isEmpty) {
+        _usernameController.text = user.username;
+      }
+      if (_fullNameController.text.isEmpty) {
+        _fullNameController.text = user.fullName;
+      }
+      if (_bioController.text.isEmpty) {
+        _bioController.text = user.bio;
+      }
+      if (_avatarUrlController.text.isEmpty) {
+        _avatarUrlController.text = user.avatarUrl;
+      }
     }
   }
 
@@ -87,6 +96,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
       if (success) {
+        // Force refresh the user data to ensure the avatar URL is updated
+        await authProvider.refreshUser();
         Navigator.pop(context);
       }
     }

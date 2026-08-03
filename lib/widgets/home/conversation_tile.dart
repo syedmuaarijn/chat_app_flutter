@@ -97,41 +97,45 @@ class ConversationTile extends StatelessWidget {
             ),
         ],
       ),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (lastMsg != null)
-            Text(
-              _formatTime(lastMsg.createdAt),
-              style: TextStyle(
-                fontSize: 11,
-                color: unread > 0
-                    ? colorScheme.primary
-                    : colorScheme.onSurface.withValues(alpha: 0.45),
-              ),
-            ),
-          if (unread > 0) ...[
-            const SizedBox(height: 4),
-            Container(
-              padding: const EdgeInsets.all(5),
-              decoration: BoxDecoration(
-                color: colorScheme.primary,
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                unread > 99 ? '99+' : '$unread',
-                style: TextStyle(
-                  color: colorScheme.onPrimary,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
+      trailing: _buildTrailing(colorScheme, lastMsg, unread),
       onTap: onTap,
+    );
+  }
+
+  Widget _buildTrailing(ColorScheme colorScheme, MessageModel? lastMsg, int unread) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (lastMsg != null)
+          Text(
+            _formatTime(lastMsg.createdAt),
+            style: TextStyle(
+              fontSize: 11,
+              color: unread > 0
+                  ? colorScheme.primary
+                  : colorScheme.onSurface.withValues(alpha: 0.45),
+            ),
+          ),
+        if (unread > 0) ...[
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: colorScheme.primary,
+              shape: BoxShape.circle,
+            ),
+            child: Text(
+              unread > 99 ? '99+' : '$unread',
+              style: TextStyle(
+                color: colorScheme.onPrimary,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
