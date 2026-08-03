@@ -29,7 +29,9 @@ class CallProvider with ChangeNotifier {
   int _callDurationSeconds = 0;
   Timer? _callDurationTimer;
   Timer? _incomingCallTimeoutTimer;
+  Timer? _outgoingCallTimeoutTimer;
   Timer? _endedAutoClearTimer;
+  String? _callOutcome;
 
   // Realtime subscription
   RealtimeChannel? _callSignalChannel;
@@ -81,6 +83,13 @@ class CallProvider with ChangeNotifier {
   bool get isIdle => _status == CallStatus.idle;
   bool get isEnded => _status == CallStatus.ended;
 
+  /// The outcome of the last (or current ending) call.
+  /// Values: 'completed', 'declined', 'not_picked', or null while in progress.
+  String? get callOutcome => _callOutcome;
+
+  /// Whether the remote peer ever joined the Agora channel in this session.
+  bool get hasRemotePeerJoined => _hasRemotePeerJoined;
+
   // ── Outgoing call ─────────────────────────────────────────────────────────
   Future<bool> startCall({
     required String conversationId,
@@ -109,6 +118,7 @@ class CallProvider with ChangeNotifier {
     _isRemoteVideoPaused = false;
     _callDurationSeconds = 0;
     _lastError = null;
+    _callOutcome = null;
     _status = CallStatus.ringing;
     notifyListeners();
 
@@ -129,6 +139,7 @@ class CallProvider with ChangeNotifier {
       );
       inviteSent = true;
       _createCallHistory();
+      _startOutgoingCallTimeout();
 
       // Play outgoing ringing tone (fire and forget, do not await)
       _playRingtone(outgoing: true);
@@ -223,6 +234,7 @@ class CallProvider with ChangeNotifier {
 
     _stopRingtone();
     _incomingCallTimeoutTimer?.cancel();
+    _callOutcome = 'declined';
 
     try {
       await _agoraService.decline(
@@ -244,6 +256,8 @@ class CallProvider with ChangeNotifier {
     _stopRingtone();
     _stopDurationTimer();
     _incomingCallTimeoutTimer?.cancel();
+    _outgoingCallTimeoutTimer?.cancel();
+    if (!_hasRemotePeerJoined) _callOutcome = 'not_picked';
 
     final signalConversationId = _signalConversationId;
     final remoteId = _remoteUserId;
@@ -301,9 +315,30 @@ class CallProvider with ChangeNotifier {
   // ── Incoming call timeout ──────────────────────────────────────────────────
   void startIncomingCallTimeout() {
     _incomingCallTimeoutTimer?.cancel();
-    _incomingCallTimeoutTimer = Timer(const Duration(seconds: 30), () async {
+    _incomingCallTimeoutTimer = Timer(const Duration(seconds: 90), () async {
       if (_status == CallStatus.ringing && _isIncoming) {
         _stopRingtone();
+        _callOutcome = 'not_picked';
+        try {
+          await _agoraService.endCall(
+            _signalConversationId!, _remoteUserId!, _callMode,
+          );
+        } catch (_) {}
+        await _doLocalEnd(popNav: true);
+      }
+    });
+  }
+
+  void _startOutgoingCallTimeout() {
+    _outgoingCallTimeoutTimer?.cancel();
+    _outgoingCallTimeoutTimer = Timer(const Duration(seconds: 90), () async {
+      if (_status == CallStatus.ringing && !_isIncoming) {
+        _callOutcome = 'not_picked';
+        try {
+          await _agoraService.endCall(
+            _signalConversationId!, _remoteUserId!, _callMode,
+          );
+        } catch (_) {}
         await _doLocalEnd(popNav: true);
       }
     });
@@ -392,10 +427,12 @@ class CallProvider with ChangeNotifier {
             _handleCallAccepted();
             break;
           case 'decline':
-            _handleCallDeclinedOrEnded();
+            _handleCallDeclinedOrEnded('declined');
             break;
           case 'end':
-            _handleCallDeclinedOrEnded();
+            _handleCallDeclinedOrEnded(
+              _hasRemotePeerJoined ? 'completed' : 'not_picked',
+            );
             break;
         }
       },
@@ -488,11 +525,13 @@ class CallProvider with ChangeNotifier {
     debugPrint('CallProvider: call accepted — now active');
   }
 
-  void _handleCallDeclinedOrEnded() async {
+  void _handleCallDeclinedOrEnded([String? outcome]) async {
     if (_status == CallStatus.idle) return;
     _stopRingtone();
     _stopDurationTimer();
     _incomingCallTimeoutTimer?.cancel();
+    _outgoingCallTimeoutTimer?.cancel();
+    _callOutcome = outcome ?? _callOutcome;
 
     await _finishCallHistory();
     await _agoraService.dispose();
@@ -526,6 +565,7 @@ class CallProvider with ChangeNotifier {
         _stopRingtone();
         _status = CallStatus.active;
         _startDurationTimer();
+        _outgoingCallTimeoutTimer?.cancel();
         notifyListeners();
       } else if (_status == CallStatus.active) {
         // Recipient: confirm active, ensure timer is running
@@ -539,7 +579,7 @@ class CallProvider with ChangeNotifier {
       debugPrint('CallProvider: remote user left Agora uid=$uid');
       if (_status == CallStatus.active || _status == CallStatus.ringing) {
         if (_hasRemotePeerJoined) {
-          _handleCallDeclinedOrEnded();
+          _handleCallDeclinedOrEnded('completed');
         } else {
           debugPrint(
             'CallProvider: ignoring ghost onRemoteUserLeft — no real peer joined this session (uid=$uid)',
@@ -598,6 +638,7 @@ class CallProvider with ChangeNotifier {
   Future<void> _doLocalEnd({bool popNav = false}) async {
     _stopDurationTimer();
     _incomingCallTimeoutTimer?.cancel();
+    _outgoingCallTimeoutTimer?.cancel();
     _endedAutoClearTimer?.cancel();
 
     await _finishCallHistory();
@@ -634,6 +675,7 @@ class CallProvider with ChangeNotifier {
     _hasRemotePeerJoined = false;
     _isIncoming = false;
     _callDurationSeconds = 0;
+    _callOutcome = null;
   }
 
   Future<void> _createCallHistory() async {
@@ -668,13 +710,15 @@ class CallProvider with ChangeNotifier {
   Future<void> _finishCallHistory() async {
     final sessionId = _currentCallSessionId;
     if (sessionId == null) return;
+    // Receivers who never accepted (still ringing) don't own a history row —
+    // the caller's signal handler updates the record on their side instead.
+    if (_isIncoming && _status == CallStatus.ringing) return;
     try {
       await Supabase.instance.client
           .from('call_history')
           .update({
-            'status': _hasRemotePeerJoined
-                ? 'completed'
-                : (_isIncoming ? 'missed' : 'cancelled'),
+            'status': _callOutcome ??
+                (_hasRemotePeerJoined ? 'completed' : 'not_picked'),
             'ended_at': DateTime.now().toUtc().toIso8601String(),
             'duration_seconds': _callDurationSeconds,
           })
@@ -730,6 +774,7 @@ class CallProvider with ChangeNotifier {
     _stopDurationTimer();
     _stopRingtone();
     _incomingCallTimeoutTimer?.cancel();
+    _outgoingCallTimeoutTimer?.cancel();
     _endedAutoClearTimer?.cancel();
     _resetState();
     _status = CallStatus.idle;
@@ -741,6 +786,7 @@ class CallProvider with ChangeNotifier {
     _stopDurationTimer();
     _stopRingtone();
     _incomingCallTimeoutTimer?.cancel();
+    _outgoingCallTimeoutTimer?.cancel();
     _endedAutoClearTimer?.cancel();
     stopListeningToCallSignals();
     super.dispose();

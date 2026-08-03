@@ -152,8 +152,17 @@ class _CallScreenState extends State<CallScreen>
     Color color;
 
     if (callProvider.isEnded) {
-      label = 'Call Ended';
-      color = Colors.redAccent;
+      switch (callProvider.callOutcome) {
+        case 'declined':
+          label = 'Call Declined';
+          color = Colors.redAccent;
+        case 'not_picked':
+          label = 'Not Picked Up';
+          color = Colors.orangeAccent;
+        default:
+          label = 'Call Ended';
+          color = Colors.redAccent;
+      }
     } else if (callProvider.isActive) {
       label = callProvider.formattedDuration;
       color = Colors.greenAccent;
@@ -262,12 +271,29 @@ class _CallScreenState extends State<CallScreen>
   }
 
   Widget _buildEndedLabel() {
-    return const Padding(
-      padding: EdgeInsets.only(bottom: 80),
-      child: Text(
-        'Call Ended',
-        style: TextStyle(color: Colors.redAccent, fontSize: 16),
-      ),
+    return Consumer<CallProvider>(
+      builder: (context, callProvider, _) {
+        final String text;
+        final Color color;
+        switch (callProvider.callOutcome) {
+          case 'declined':
+            text = 'Call Declined';
+            color = Colors.redAccent;
+          case 'not_picked':
+            text = 'Not Picked Up';
+            color = Colors.orangeAccent;
+          default:
+            text = 'Call Ended';
+            color = Colors.redAccent;
+        }
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 80),
+          child: Text(
+            text,
+            style: TextStyle(color: color, fontSize: 16),
+          ),
+        );
+      },
     );
   }
 

@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS public.call_history (
   caller_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   receiver_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   call_type text NOT NULL CHECK (call_type IN ('audio', 'video')),
-  status text NOT NULL DEFAULT 'ringing' CHECK (status IN ('ringing', 'active', 'completed', 'missed', 'cancelled')),
+  status text NOT NULL DEFAULT 'ringing' CHECK (status IN ('ringing', 'active', 'completed', 'declined', 'not_picked')),
   started_at timestamptz NOT NULL DEFAULT now(),
   accepted_at timestamptz,
   ended_at timestamptz,

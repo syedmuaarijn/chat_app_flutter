@@ -28,12 +28,36 @@ class VideoCallScreen extends StatelessWidget {
                 if (!call.isEnded) _LocalPreview(call: call),
                 if (!call.isEnded) _Controls(call: call),
                 if (call.isEnded)
-                  const ColoredBox(
+                  ColoredBox(
                     color: Colors.black,
                     child: Center(
-                      child: Text(
-                        'Call Ended',
-                        style: TextStyle(color: Colors.white, fontSize: 18),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            call.callOutcome == 'declined'
+                                ? Icons.call_end
+                                : call.callOutcome == 'not_picked'
+                                    ? Icons.phone_missed
+                                    : Icons.call_end,
+                            color: call.callOutcome == 'not_picked'
+                                ? Colors.orangeAccent
+                                : Colors.redAccent,
+                            size: 48,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            switch (call.callOutcome) {
+                              'declined' => 'Call Declined',
+                              'not_picked' => 'Not Picked Up',
+                              _ => 'Call Ended',
+                            },
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -129,7 +153,11 @@ class _Header extends StatelessWidget {
           ),
         ),
         Text(
-          call.isActive ? call.formattedDuration : 'Connecting…',
+          call.isActive
+              ? call.formattedDuration
+              : call.isRinging
+                  ? 'Ringing…'
+                  : 'Connecting…',
           style: const TextStyle(color: Colors.white70),
         ),
       ],
