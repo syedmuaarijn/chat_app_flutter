@@ -1,6 +1,8 @@
 import 'package:chat_app_flutter/providers/auth_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:chat_app_flutter/widgets/common/abstract_background.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -17,17 +19,23 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isFirstLaunch = prefs.getBool('first_launch') ?? true;
+
+    if (isFirstLaunch) {
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/onboarding');
+      return;
+    }
+
+    if (!mounted) return;
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
-    // AuthProvider._initAuth() runs on construction and may still be loading.
-    // Wait for it to finish before we check isAuthenticated.
-    // Hard 10-second cap so we never hang on splash (e.g. Android offline with
-    // a stale token that causes setSession to time out).
     if (authProvider.isLoading) {
       final deadline = DateTime.now().add(const Duration(seconds: 10));
       await Future.doWhile(() async {
         await Future.delayed(const Duration(milliseconds: 50));
-        if (DateTime.now().isAfter(deadline)) return false; // break out
+        if (DateTime.now().isAfter(deadline)) return false; 
         return authProvider.isLoading;
       });
     }
@@ -43,34 +51,36 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.chat_bubble_rounded,
-              size: 80,
-              color: colorScheme.primary,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Chat App',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
+      body: Stack(
+        children: [
+          const AbstractBackground(),
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset('assets/yapp-logo.png', height: 104),
+                const SizedBox(height: 24),
+                const SizedBox(height: 8),
+                Text(
+                  'because silence is overrated',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                    fontStyle: FontStyle.italic,
                   ),
+                ),
+                const SizedBox(height: 48),
+                CircularProgressIndicator(
+                  color: accent,
+                  strokeWidth: 2,
+                ),
+              ],
             ),
-            const SizedBox(height: 48),
-            CircularProgressIndicator(
-              color: colorScheme.primary,
-              strokeWidth: 2,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -1,5 +1,6 @@
-import 'package:cached_network_image/cached_network_image.dart';
+import 'dart:ui';
 import 'package:chat_app_flutter/providers/call_provider.dart';
+import 'package:chat_app_flutter/widgets/common/avatar_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -58,29 +59,62 @@ class _CallsScreenState extends State<CallsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      FutureBuilder<List<Map<String, dynamic>>>(
-        future: _calls,
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.data!.isEmpty) {
-            return const Center(child: Text('No calls yet'));
-          }
-          return RefreshIndicator(
-            onRefresh: () async => setState(() => _calls = _load()),
-            child: ListView.separated(
-              itemCount: snapshot.data!.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (context, i) => _tile(snapshot.data![i]),
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _calls,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.data!.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.phone_missed_rounded,
+                  size: 72,
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.25)
+                      : Colors.black.withValues(alpha: 0.2),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No calls yet',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.4)
+                        : Colors.black.withValues(alpha: 0.35),
+                  ),
+                ),
+              ],
             ),
           );
-        },
-      );
+        }
+        return RefreshIndicator(
+          onRefresh: () async => setState(() => _calls = _load()),
+          child: ListView.separated(
+            padding: const EdgeInsets.only(bottom: 120, top: 8),
+            itemCount: snapshot.data!.length,
+            separatorBuilder: (_, _) => Divider(
+              height: 1,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.black.withValues(alpha: 0.07),
+            ),
+            itemBuilder: (context, i) => _tile(snapshot.data![i]),
+          ),
+        );
+      },
+    );
+  }
 
-  // ── List tile ──────────────────────────────────────────────────────────────
   Widget _tile(Map<String, dynamic> c) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final p = c['profile'] as Map<String, dynamic>? ?? {};
     final name = _displayName(p);
     final video = c['call_type'] == 'video';
@@ -89,68 +123,102 @@ class _CallsScreenState extends State<CallsScreen> {
     final missed = status == 'not_picked' || status == 'declined';
     final time =
         DateFormat('MMM d, h:mm a').format(DateTime.parse(c['started_at']).toLocal());
+    final avatarUrl = p['avatar_url'] as String? ?? '';
 
-    return ListTile(
-      onTap: () => _showDetail(c),
-      leading: CircleAvatar(
-        backgroundImage: (p['avatar_url'] as String?)?.isNotEmpty == true
-            ? CachedNetworkImageProvider(p['avatar_url'] as String)
-            : null,
-        child: (p['avatar_url'] as String?)?.isNotEmpty == true
-            ? null
-            : Text(name[0].toUpperCase()),
-      ),
-      title: Text(
-        name,
-        style: TextStyle(
-          fontWeight: FontWeight.w600,
-          color: missed ? Colors.red : null,
-        ),
-      ),
-      subtitle: Row(
-        children: [
-          Icon(
-            outgoing ? Icons.call_made_rounded : Icons.call_received_rounded,
-            size: 14,
-            color: missed
-                ? Colors.red
-                : Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              '$time  ·  ${_statusLabel(status, c['duration_seconds'] as int? ?? 0)}',
-              overflow: TextOverflow.ellipsis,
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+        child: Container(
+          color: Colors.transparent,
+          child: ListTile(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            onTap: () => _showDetail(c),
+            leading: CircleAvatar(
+              radius: 22,
+              backgroundColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+              backgroundImage: avatarUrl.isNotEmpty
+                  ? AvatarHelper.getAvatarProvider(avatarUrl)
+                  : null,
+              child: avatarUrl.isEmpty
+                  ? Text(
+                      name[0].toUpperCase(),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.primary,
+                      ),
+                    )
+                  : null,
+            ),
+            title: Text(
+              name,
               style: TextStyle(
-                color: missed ? Colors.red : null,
-                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: missed
+                    ? Colors.red
+                    : (isDark ? Colors.white : Colors.black87),
+              ),
+            ),
+            subtitle: Row(
+              children: [
+                Icon(
+                  outgoing
+                      ? Icons.call_made_rounded
+                      : Icons.call_received_rounded,
+                  size: 13,
+                  color: missed ? Colors.red : theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    '$time  ·  ${_statusLabel(status, c['duration_seconds'] as int? ?? 0)}',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: missed
+                          ? Colors.red
+                          : (isDark
+                              ? Colors.white.withValues(alpha: 0.55)
+                              : Colors.black.withValues(alpha: 0.5)),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            trailing: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                border: Border.all(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.25),
+                ),
+              ),
+              child: IconButton(
+                tooltip: video ? 'Video call' : 'Voice call',
+                icon: Icon(
+                  video ? Icons.videocam_rounded : Icons.phone_rounded,
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
+                onPressed: () =>
+                    _startCall(c, name, avatarUrl),
               ),
             ),
           ),
-        ],
-      ),
-      trailing: IconButton(
-        tooltip: video ? 'Video call' : 'Voice call',
-        icon: Icon(video ? Icons.videocam_rounded : Icons.phone_rounded),
-        onPressed: () =>
-            _startCall(c, name, p['avatar_url'] as String? ?? ''),
+        ),
       ),
     );
   }
 
-  // ── Detail bottom sheet ────────────────────────────────────────────────────
   void _showDetail(Map<String, dynamic> c) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (_) => _CallDetailSheet(call: c, onCallBack: _startCall),
     );
   }
 
-  // ── Start a new call from history ──────────────────────────────────────────
   Future<void> _startCall(
       Map<String, dynamic> c, String name, String avatar) async {
     final user = Supabase.instance.client.auth.currentUser?.id;
@@ -175,7 +243,6 @@ class _CallsScreenState extends State<CallsScreen> {
     }
   }
 
-  // ── Helpers ────────────────────────────────────────────────────────────────
   static String _displayName(Map<String, dynamic> p) {
     final full = p['full_name'] as String?;
     if (full != null && full.isNotEmpty) return full;
@@ -192,16 +259,16 @@ class _CallsScreenState extends State<CallsScreen> {
     }
     return switch (status) {
       'not_picked' => 'Not picked up',
-      'declined'   => 'Declined',
-      'completed'  => 'Completed',
-      'active'     => 'Active',
-      'ringing'    => 'Ringing',
-      _            => status,
+      'declined' => 'Declined',
+      'completed' => 'Completed',
+      'active' => 'Active',
+      'ringing' => 'Ringing',
+      _ => status,
     };
   }
 }
 
-// ── Call detail bottom sheet ───────────────────────────────────────────────────
+// ── Call detail bottom sheet ──────────────────────────────────────────────────
 class _CallDetailSheet extends StatelessWidget {
   const _CallDetailSheet({
     required this.call,
@@ -213,6 +280,8 @@ class _CallDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final p = call['profile'] as Map<String, dynamic>? ?? {};
     final name = _name(p);
     final avatar = p['avatar_url'] as String? ?? '';
@@ -222,7 +291,8 @@ class _CallDetailSheet extends StatelessWidget {
     final duration = call['duration_seconds'] as int? ?? 0;
     final missed = status == 'not_picked' || status == 'declined';
 
-    final startedAt = DateTime.parse(call['started_at'] as String).toLocal();
+    final startedAt =
+        DateTime.parse(call['started_at'] as String).toLocal();
     final acceptedAt = call['accepted_at'] != null
         ? DateTime.parse(call['accepted_at'] as String).toLocal()
         : null;
@@ -230,99 +300,131 @@ class _CallDetailSheet extends StatelessWidget {
         ? DateTime.parse(call['ended_at'] as String).toLocal()
         : null;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Drag handle
-          Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.55)
+                : Colors.white.withValues(alpha: 0.75),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(
+              top: BorderSide(
+                color: theme.colorScheme.primary.withValues(alpha: 0.2),
+              ),
             ),
           ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : Colors.black.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
 
-          // Avatar + name
-          CircleAvatar(
-            radius: 36,
-            backgroundImage: avatar.isNotEmpty
-                ? CachedNetworkImageProvider(avatar)
-                : null,
-            child: avatar.isEmpty
-                ? Text(
-                    name[0].toUpperCase(),
-                    style: const TextStyle(fontSize: 28),
-                  )
-                : null,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            name,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
+                // Avatar + name
+                CircleAvatar(
+                  radius: 36,
+                  backgroundColor:
+                      theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  backgroundImage: avatar.isNotEmpty
+                      ? AvatarHelper.getAvatarProvider(avatar)
+                      : null,
+                  child: avatar.isEmpty
+                      ? Text(
+                          name[0].toUpperCase(),
+                          style: const TextStyle(fontSize: 28),
+                        )
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 4),
 
-          // Status badge
-          _StatusBadge(status: status, outgoing: outgoing),
-          const SizedBox(height: 24),
+                // Status badge
+                _StatusBadge(status: status, outgoing: outgoing),
+                const SizedBox(height: 24),
 
-          // Detail rows
-          _DetailRow(
-            icon: video ? Icons.videocam_rounded : Icons.phone_rounded,
-            label: 'Type',
-            value: video ? 'Video call' : 'Voice call',
-          ),
-          _DetailRow(
-            icon: outgoing
-                ? Icons.call_made_rounded
-                : Icons.call_received_rounded,
-            label: 'Direction',
-            value: outgoing ? 'Outgoing' : 'Incoming',
-            valueColor: missed ? Colors.red : null,
-          ),
-          _DetailRow(
-            icon: Icons.schedule_rounded,
-            label: 'Started',
-            value: DateFormat('MMM d, yyyy  h:mm a').format(startedAt),
-          ),
-          if (acceptedAt != null)
-            _DetailRow(
-              icon: Icons.call_rounded,
-              label: 'Answered',
-              value: DateFormat('h:mm a').format(acceptedAt),
+                // Detail rows
+                _DetailRow(
+                  icon: video ? Icons.videocam_rounded : Icons.phone_rounded,
+                  label: 'Type',
+                  value: video ? 'Video call' : 'Voice call',
+                ),
+                _DetailRow(
+                  icon: outgoing
+                      ? Icons.call_made_rounded
+                      : Icons.call_received_rounded,
+                  label: 'Direction',
+                  value: outgoing ? 'Outgoing' : 'Incoming',
+                  valueColor: missed ? Colors.red : null,
+                ),
+                _DetailRow(
+                  icon: Icons.schedule_rounded,
+                  label: 'Started',
+                  value: DateFormat('MMM d, yyyy  h:mm a').format(startedAt),
+                ),
+                if (acceptedAt != null)
+                  _DetailRow(
+                    icon: Icons.call_rounded,
+                    label: 'Answered',
+                    value: DateFormat('h:mm a').format(acceptedAt),
+                  ),
+                if (endedAt != null)
+                  _DetailRow(
+                    icon: Icons.call_end_rounded,
+                    label: 'Ended',
+                    value: DateFormat('h:mm a').format(endedAt),
+                  ),
+                _DetailRow(
+                  icon: Icons.timer_rounded,
+                  label: 'Duration',
+                  value: duration > 0 ? _formatDuration(duration) : '—',
+                ),
+                const SizedBox(height: 28),
+
+                // Call back button
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    icon:
+                        Icon(video ? Icons.videocam_rounded : Icons.phone_rounded),
+                    label: Text(video ? 'Video call back' : 'Call back'),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      onCallBack(call, name, avatar);
+                    },
+                  ),
+                ),
+              ],
             ),
-          if (endedAt != null)
-            _DetailRow(
-              icon: Icons.call_end_rounded,
-              label: 'Ended',
-              value: DateFormat('h:mm a').format(endedAt),
-            ),
-          _DetailRow(
-            icon: Icons.timer_rounded,
-            label: 'Duration',
-            value: duration > 0
-                ? _formatDuration(duration)
-                : '—',
           ),
-          const SizedBox(height: 28),
-
-          // Call back button
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              icon: Icon(video ? Icons.videocam_rounded : Icons.phone_rounded),
-              label: Text(video ? 'Video call back' : 'Call back'),
-              onPressed: () {
-                Navigator.pop(context);
-                onCallBack(call, name, avatar);
-              },
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -342,7 +444,7 @@ class _CallDetailSheet extends StatelessWidget {
   }
 }
 
-// ── Status badge ───────────────────────────────────────────────────────────────
+// ── Status badge ──────────────────────────────────────────────────────────────
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status, required this.outgoing});
 
@@ -352,11 +454,11 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color, icon) = switch (status) {
-      'completed'  => ('Completed',    Colors.green,       Icons.check_circle_rounded),
-      'declined'   => ('Declined',     Colors.red,         Icons.cancel_rounded),
-      'not_picked' => ('Not picked up', Colors.orange,     Icons.phone_missed_rounded),
-      'active'     => ('Active',        Colors.blue,       Icons.call_rounded),
-      _            => ('Missed',        Colors.red,        Icons.phone_missed_rounded),
+      'completed' => ('Completed', Colors.green, Icons.check_circle_rounded),
+      'declined' => ('Declined', Colors.red, Icons.cancel_rounded),
+      'not_picked' => ('Not picked up', Colors.orange, Icons.phone_missed_rounded),
+      'active' => ('Active', Colors.blue, Icons.call_rounded),
+      _ => ('Missed', Colors.red, Icons.phone_missed_rounded),
     };
 
     return Container(
@@ -385,7 +487,7 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// ── Detail row ─────────────────────────────────────────────────────────────────
+// ── Detail row ────────────────────────────────────────────────────────────────
 class _DetailRow extends StatelessWidget {
   const _DetailRow({
     required this.icon,
@@ -402,6 +504,7 @@ class _DetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -413,7 +516,9 @@ class _DetailRow extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.5)
+                    : Colors.black.withValues(alpha: 0.45),
                 fontSize: 13,
               ),
             ),
@@ -424,7 +529,8 @@ class _DetailRow extends StatelessWidget {
               style: TextStyle(
                 fontWeight: FontWeight.w500,
                 fontSize: 14,
-                color: valueColor,
+                color: valueColor ??
+                    (isDark ? Colors.white : Colors.black87),
               ),
             ),
           ),

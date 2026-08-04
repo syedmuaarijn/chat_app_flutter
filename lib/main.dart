@@ -9,6 +9,7 @@ import 'package:chat_app_flutter/screens/login_screen.dart';
 import 'package:chat_app_flutter/screens/reset_password_screen.dart';
 import 'package:chat_app_flutter/screens/signup_screen.dart';
 import 'package:chat_app_flutter/screens/splash_screen.dart';
+import 'package:chat_app_flutter/screens/onboarding_screen.dart';
 import 'package:chat_app_flutter/widgets/calling/call_screen.dart';
 import 'package:chat_app_flutter/widgets/calling/incoming_call_dialog.dart';
 import 'package:chat_app_flutter/widgets/calling/video_call_screen.dart';
@@ -16,6 +17,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import 'package:chat_app_flutter/providers/theme_provider.dart';
 
@@ -24,6 +26,7 @@ final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LiquidGlassWidgets.initialize();
 
   // Initialize Hive for local storage
   await Hive.initFlutter();
@@ -34,7 +37,12 @@ void main() async {
     url: SupabaseConfig.supabaseUrl,
     publishableKey: SupabaseConfig.supabasePublishableKey,
   );
-  runApp(const MyApp());
+  runApp(
+    LiquidGlassWidgets.wrap(
+      adaptiveQuality: true,
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -60,58 +68,12 @@ class MyApp extends StatelessWidget {
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
           return MaterialApp(
-            title: 'Chat App',
+            title: 'Yapp',
             debugShowCheckedModeBanner: false,
             // Use the global navigator key so CallProvider can push routes
             navigatorKey: appNavigatorKey,
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.blue,
-                brightness: Brightness.light,
-              ),
-              useMaterial3: true,
-              appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
-              inputDecorationTheme: InputDecorationTheme(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                filled: true,
-                fillColor: Colors.grey[100],
-              ),
-              elevatedButtonTheme: ElevatedButtonThemeData(
-                style: ElevatedButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.0),
-                  ),
-                ),
-              ),
-            ),
-            darkTheme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.blue,
-                brightness: Brightness.dark,
-              ),
-              useMaterial3: true,
-              appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
-              inputDecorationTheme: InputDecorationTheme(
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8.0),
-                ),
-                filled: true,
-                fillColor: Colors.grey[800],
-              ),
-              elevatedButtonTheme: ElevatedButtonThemeData(
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 16,
-                    horizontal: 32,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12.0),
-                  ),
-                ),
-              ),
-            ),
+            theme: themeProvider.buildLightTheme(),
+            darkTheme: themeProvider.buildDarkTheme(),
             themeMode: themeProvider.themeMode,
 
             // SplashScreen is the entry point — it decides where to go
@@ -119,6 +81,7 @@ class MyApp extends StatelessWidget {
 
             routes: {
               '/splash': (context) => const SplashScreen(),
+              '/onboarding': (context) => const OnboardingScreen(),
               '/login': (context) => const LoginScreen(),
               '/signup': (context) => const SignupScreen(),
               '/forgotPassword': (context) => const ForgotPasswordScreen(),

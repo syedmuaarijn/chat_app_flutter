@@ -15,7 +15,6 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/models/user_model.dart';
 import 'package:chat_app_flutter/providers/theme_provider.dart';
 import 'package:chat_app_flutter/services/local_cache_service.dart';

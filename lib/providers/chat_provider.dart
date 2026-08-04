@@ -25,8 +25,8 @@ class ChatProvider with ChangeNotifier {
   List<ParticipantInfo> _groupParticipants = [];
   final Map<String, List<UserModel>> _userSearchCache = {};
 
-  bool _conversationsLoading = false;
-  bool _messagesLoading = false;
+  final bool _conversationsLoading = false;
+  final bool _messagesLoading = false;
   bool _usersLoading = false;
   bool _groupParticipantsLoading = false;
   bool _groupCreating = false;

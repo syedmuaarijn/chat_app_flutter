@@ -27,7 +27,7 @@ class AiChatService {
   }) async {
     final accessToken = _client.auth.currentSession?.accessToken;
     if (accessToken == null) {
-      throw Exception('Please sign in again to use Nova.');
+      throw Exception('Please sign in again to use Yapp AI.');
     }
 
     final request =
@@ -53,8 +53,8 @@ class AiChatService {
         final data = jsonDecode(body);
         throw Exception(
           data is Map
-              ? data['error'] ?? 'Nova is unavailable right now.'
-              : 'Nova is unavailable right now.',
+              ? data['error'] ?? 'Yapp AI is unavailable right now.'
+              : 'Yapp AI is unavailable right now.',
         );
       }
 

@@ -1,12 +1,14 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/models/user_model.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
 import 'package:chat_app_flutter/screens/chat_room_screen.dart';
+import 'package:chat_app_flutter/widgets/common/avatar_helper.dart';
+import 'package:chat_app_flutter/widgets/common/abstract_background.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 class NewChatScreen extends StatefulWidget {
   const NewChatScreen({super.key});
@@ -45,7 +47,6 @@ class _NewChatScreenState extends State<NewChatScreen> {
 
   Future<void> _openChat(UserModel user) async {
     final chatProvider = context.read<ChatProvider>();
-
     final conversationId = await chatProvider.getOrCreateConversation(user.id);
 
     if (!mounted) return;
@@ -83,75 +84,115 @@ class _NewChatScreenState extends State<NewChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final accent = theme.colorScheme.primary;
     return Scaffold(
-      backgroundColor: colorScheme.surface,
-      appBar: AppBar(
-        title: const Text(
-          'New Chat',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-      body: Column(
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      appBar: _GlassAppBar(title: 'New Chat'),
+      body: Stack(
         children: [
-          // Search bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              autofocus: true,
-              textInputAction: TextInputAction.search,
-              onChanged: _onSearchChanged,
-              decoration: InputDecoration(
-                hintText: 'Search users...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () {
-                          _searchController.clear();
-                          _onSearchChanged('');
-                        },
-                      )
-                    : null,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          const AbstractBackground(),
+          Column(
+            children: [
+              // Spacer for appbar height
+              SizedBox(
+                height: MediaQuery.paddingOf(context).top + kToolbarHeight,
               ),
-            ),
-          ),
+              // Search bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.07)
+                            : Colors.black.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: accent.withValues(alpha: 0.2),
+                        ),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        autofocus: true,
+                        textInputAction: TextInputAction.search,
+                        onChanged: _onSearchChanged,
+                        style: TextStyle(
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Search users...',
+                          hintStyle: TextStyle(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.4)
+                                : Colors.black.withValues(alpha: 0.35),
+                          ),
+                          prefixIcon: Icon(
+                            Icons.search,
+                            color: accent.withValues(alpha: 0.7),
+                          ),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(
+                                    Icons.clear,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : Colors.black45,
+                                  ),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    _onSearchChanged('');
+                                  },
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
-          // Results
-          Expanded(
-            child: Consumer<ChatProvider>(
-              builder: (context, chatProvider, _) {
-                if (chatProvider.isLoading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (!_hasSearched) {
-                  return const SizedBox.shrink();
-                }
-
-                if (chatProvider.users.isEmpty) {
-                  return _EmptyUsers(
-                    message: _searchController.text.isEmpty
-                        ? 'No users found'
-                        : 'No results for "${_searchController.text}"',
-                  );
-                }
-
-                return ListView.builder(
-                  itemCount: chatProvider.users.length,
-                  itemBuilder: (context, index) {
-                    final user = chatProvider.users[index];
-                    return _UserTile(user: user, onTap: () => _openChat(user));
+              // Results
+              Expanded(
+                child: Consumer<ChatProvider>(
+                  builder: (context, chatProvider, _) {
+                    if (chatProvider.isLoading) {
+                      return Center(
+                        child: CircularProgressIndicator(color: accent),
+                      );
+                    }
+                    if (!_hasSearched) return const SizedBox.shrink();
+                    if (chatProvider.users.isEmpty) {
+                      return _EmptyUsers(
+                        message: _searchController.text.isEmpty
+                            ? 'No users found'
+                            : 'No results for "${_searchController.text}"',
+                      );
+                    }
+                    return ListView.builder(
+                      padding: const EdgeInsets.only(top: 8),
+                      itemCount: chatProvider.users.length,
+                      itemBuilder: (context, index) {
+                        final user = chatProvider.users[index];
+                        return _UserTile(
+                          user: user,
+                          onTap: () => _openChat(user),
+                        );
+                      },
+                    );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -159,41 +200,88 @@ class _NewChatScreenState extends State<NewChatScreen> {
   }
 }
 
-// ── Empty state ──────────────────────────────────────────────────────────────
+// ── Glass AppBar ──────────────────────────────────────────────────────────────
+class _GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
+  final String title;
+  const _GlassAppBar({required this.title});
 
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.3)
+                : Colors.white.withValues(alpha: 0.3),
+            border: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.primary.withValues(alpha: 0.15),
+              ),
+            ),
+          ),
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            iconTheme: IconThemeData(color: theme.colorScheme.primary),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Size get preferredSize => const Size.fromHeight(kToolbarHeight);
+}
+
+// ── Empty state ──────────────────────────────────────────────────────────────
 class _EmptyUsers extends StatelessWidget {
   final String message;
   const _EmptyUsers({required this.message});
 
   @override
   Widget build(BuildContext context) {
-    final muted = Theme.of(
-      context,
-    ).colorScheme.onSurface.withValues(alpha: 0.4);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final muted = isDark
+        ? Colors.white.withValues(alpha: 0.3)
+        : Colors.black.withValues(alpha: 0.3);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.person_search_rounded, size: 72, color: muted),
           const SizedBox(height: 16),
-          Text(message, style: TextStyle(fontSize: 16, color: muted)),
+          Text(
+            message,
+            style: TextStyle(fontSize: 16, color: muted),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
   }
 }
 
-// ── User tile ────────────────────────────────────────────────────────────────
-
+// ── User tile ─────────────────────────────────────────────────────────────────
 class _UserTile extends StatelessWidget {
   final UserModel user;
   final VoidCallback onTap;
-
   const _UserTile({required this.user, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final displayName = user.fullName.isNotEmpty
         ? user.fullName
         : user.username;
@@ -203,29 +291,36 @@ class _UserTile extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: CircleAvatar(
         radius: 24,
-        backgroundColor: colorScheme.primaryContainer,
+        backgroundColor: theme.colorScheme.primaryContainer.withValues(
+          alpha: 0.4,
+        ),
         backgroundImage: user.avatarUrl.isNotEmpty
-            ? CachedNetworkImageProvider(user.avatarUrl)
+            ? AvatarHelper.getAvatarProvider(user.avatarUrl)
             : null,
         child: user.avatarUrl.isEmpty
             ? Text(
                 initial,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: colorScheme.onPrimaryContainer,
+                  color: theme.colorScheme.primary,
                 ),
               )
             : null,
       ),
       title: Text(
         displayName,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
       ),
       subtitle: user.fullName.isNotEmpty
           ? Text(
               '@${user.username}',
               style: TextStyle(
-                color: colorScheme.onSurface.withValues(alpha: 0.55),
+                color: isDark
+                    ? Colors.white.withValues(alpha: 0.5)
+                    : Colors.black.withValues(alpha: 0.45),
                 fontSize: 13,
               ),
             )

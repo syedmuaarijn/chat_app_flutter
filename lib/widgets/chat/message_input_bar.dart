@@ -9,6 +9,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
+import 'package:chat_app_flutter/widgets/common/glass_container.dart';
 
 class MessageInputBar extends StatefulWidget {
   final TextEditingController controller;
@@ -166,8 +167,9 @@ class _MessageInputBarState extends State<MessageInputBar> {
         return;
       }
       final file = File(path);
-      if (!await file.exists())
+      if (!await file.exists()) {
         throw Exception('Recording file is unavailable.');
+      }
       final size = await file.length();
       if (mounted) {
         setState(() {
@@ -239,68 +241,67 @@ class _MessageInputBarState extends State<MessageInputBar> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: GlassContainer(
+          padding: const EdgeInsets.all(20),
           borderRadius: BorderRadius.circular(24),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
-                borderRadius: BorderRadius.circular(2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _AttachmentItem(
-                  icon: Icons.insert_drive_file,
-                  label: 'Document',
-                  color: Colors.indigo,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickDocument();
-                  },
-                ),
-                _AttachmentItem(
-                  icon: Icons.camera_alt,
-                  label: 'Camera',
-                  color: Colors.pink,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickCamera();
-                  },
-                ),
-                _AttachmentItem(
-                  icon: Icons.photo_library,
-                  label: 'Gallery',
-                  color: Colors.purple,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickGallery();
-                  },
-                ),
-                _AttachmentItem(
-                  icon: Icons.headset,
-                  label: 'Audio',
-                  color: Colors.orange,
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _pickAudio();
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-          ],
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _AttachmentItem(
+                    icon: Icons.insert_drive_file,
+                    label: 'Document',
+                    color: colorScheme.primary,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _pickDocument();
+                    },
+                  ),
+                  _AttachmentItem(
+                    icon: Icons.camera_alt,
+                    label: 'Camera',
+                    color: colorScheme.primary,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _pickCamera();
+                    },
+                  ),
+                  _AttachmentItem(
+                    icon: Icons.photo_library,
+                    label: 'Gallery',
+                    color: colorScheme.primary,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _pickGallery();
+                    },
+                  ),
+                  _AttachmentItem(
+                    icon: Icons.headset,
+                    label: 'Audio',
+                    color: colorScheme.primary,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _pickAudio();
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
         ),
       ),
     );
@@ -515,7 +516,11 @@ class _MessageInputBarState extends State<MessageInputBar> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    // ChatRoomScreen already accounts for the device inset. Avoid applying it
+    // a second time here, which left an empty band beneath the composer.
     return SafeArea(
+      top: false,
+      bottom: false,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -523,10 +528,11 @@ class _MessageInputBarState extends State<MessageInputBar> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
             decoration: BoxDecoration(
-              color: colorScheme.surface,
+              color: colorScheme.surface.withValues(alpha: 0.45),
               border: Border(
                 top: BorderSide(
-                  color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                  color: colorScheme.primary.withValues(alpha: 0.2),
+                  width: 1.0,
                 ),
               ),
             ),
@@ -573,18 +579,27 @@ class _MessageInputBarState extends State<MessageInputBar> {
                           constraints: const BoxConstraints(minHeight: 40),
                           decoration: BoxDecoration(
                             color: colorScheme.surfaceContainerHighest
-                                .withValues(alpha: 0.6),
+                                .withValues(alpha: 0.48),
                             borderRadius: BorderRadius.circular(24),
+                            border: Border.all(
+                              color: colorScheme.outline.withValues(
+                                alpha: 0.24,
+                              ),
+                            ),
                           ),
                           child: TextField(
                             controller: widget.controller,
                             focusNode: _focusNode,
+                            style: TextStyle(color: colorScheme.onSurface),
                             minLines: 1,
                             maxLines: 5,
                             textCapitalization: TextCapitalization.sentences,
                             textInputAction: TextInputAction.newline,
-                            decoration: const InputDecoration(
+                            decoration: InputDecoration(
                               hintText: 'Type a message...',
+                              hintStyle: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                               border: InputBorder.none,
                               enabledBorder: InputBorder.none,
                               focusedBorder: InputBorder.none,
@@ -717,13 +732,17 @@ class _AttachmentItem extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 28,
-              backgroundColor: color,
-              child: Icon(icon, color: Colors.white, size: 26),
+              backgroundColor: color.withValues(alpha: 0.16),
+              child: Icon(icon, color: color, size: 26),
             ),
             const SizedBox(height: 8),
             Text(
               label,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
           ],
         ),
@@ -792,8 +811,26 @@ class _RecordingBarState extends State<_RecordingBar>
   }
 
   static const List<double> _wave = [
-    0.3, 0.7, 0.5, 0.9, 0.4, 0.8, 0.3, 0.6, 0.9, 0.5,
-    0.4, 0.8, 0.3, 0.7, 0.5, 0.9, 0.4, 0.6, 0.8, 0.3,
+    0.3,
+    0.7,
+    0.5,
+    0.9,
+    0.4,
+    0.8,
+    0.3,
+    0.6,
+    0.9,
+    0.5,
+    0.4,
+    0.8,
+    0.3,
+    0.7,
+    0.5,
+    0.9,
+    0.4,
+    0.6,
+    0.8,
+    0.3,
   ];
 
   @override
@@ -844,8 +881,7 @@ class _RecordingBarState extends State<_RecordingBar>
                     if (!widget.isPaused) {
                       const twoPi = 2.0 * 3.14159265;
                       final phase =
-                          (i / _wave.length * twoPi) +
-                          _pulseCtrl.value * twoPi;
+                          (i / _wave.length * twoPi) + _pulseCtrl.value * twoPi;
                       final bump = (phase % twoPi) / twoPi;
                       h = (h + 0.3 * (0.5 - (bump - 0.5).abs())).clamp(
                         0.1,
@@ -874,9 +910,7 @@ class _RecordingBarState extends State<_RecordingBar>
         IconButton(
           tooltip: widget.isPaused ? 'Resume' : 'Pause',
           icon: Icon(
-            widget.isPaused
-                ? Icons.play_arrow_rounded
-                : Icons.pause_rounded,
+            widget.isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
             color: cs.onSurface,
           ),
           onPressed: widget.onTogglePause,

@@ -1,6 +1,7 @@
 import 'package:chat_app_flutter/providers/ai_chat_provider.dart';
 import 'package:chat_app_flutter/widgets/ai/ai_message_bubble.dart';
 import 'package:chat_app_flutter/widgets/ai/ai_typing_indicator.dart';
+import 'package:chat_app_flutter/widgets/common/abstract_background.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -69,7 +70,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Clear AI chat?'),
         content: const Text(
-          'This permanently deletes your conversation with Nova.',
+          'This permanently deletes your conversation with Yapp AI.',
         ),
         actions: [
           TextButton(
@@ -95,116 +96,134 @@ class _AiChatScreenState extends State<AiChatScreen> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     return Scaffold(
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.black.withValues(alpha: 0.2),
+        elevation: 0,
         titleSpacing: 0,
         title: Row(
           children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [colors.primary, colors.tertiary],
-                ),
-              ),
-              child: const Icon(
-                Icons.auto_awesome,
-                color: Colors.white,
-                size: 19,
-              ),
+            const CircleAvatar(
+              radius: 18,
+              backgroundImage: AssetImage('assets/yapp_ai_avatar.png'),
             ),
             const SizedBox(width: 10),
-            const Column(
+            Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Nova',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                const Text(
+                  'Yapp AI',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
                 ),
-                Text('AI assistant', style: TextStyle(fontSize: 12)),
+                Text('Your smart companion', style: TextStyle(fontSize: 12, color: colors.primary)),
               ],
             ),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete_outline),
+            icon: const Icon(Icons.delete_outline, color: Colors.white),
             tooltip: 'Clear chat',
             onPressed: _clearChat,
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: Consumer<AiChatProvider>(
-              builder: (context, provider, _) {
-                if (provider.isLoading) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (provider.errorMessage != null) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (!mounted || provider.errorMessage == null) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(provider.errorMessage!),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                    provider.dismissError();
-                  });
-                }
-                final messages = provider.messages
-                    .where((message) => message.content.isNotEmpty)
-                    .toList();
-                if (provider.isThinking) _scrollToBottom();
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: messages.length + (provider.isThinking ? 1 : 0),
-                  itemBuilder: (_, index) =>
-                      provider.isThinking && index == messages.length
-                      ? const AiTypingIndicator()
-                      : AiMessageBubble(message: messages[index]),
-                );
-              },
-            ),
-          ),
+          const AbstractBackground(),
           SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      minLines: 1,
-                      maxLines: 5,
-                      textInputAction: TextInputAction.newline,
-                      decoration: const InputDecoration(
-                        hintText: 'Message Nova…',
-                      ),
-                      onSubmitted: (_) => _send(),
+            child: Column(
+              children: [
+                Expanded(
+                  child: Consumer<AiChatProvider>(
+                    builder: (context, provider, _) {
+                      if (provider.isLoading) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (provider.errorMessage != null) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted || provider.errorMessage == null) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(provider.errorMessage!),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                          provider.dismissError();
+                        });
+                      }
+                      final messages = provider.messages
+                          .where((message) => message.content.isNotEmpty)
+                          .toList();
+                      if (provider.isThinking) _scrollToBottom();
+                      return ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                        itemCount: messages.length + (provider.isThinking ? 1 : 0),
+                        itemBuilder: (_, index) =>
+                            provider.isThinking && index == messages.length
+                            ? const AiTypingIndicator()
+                            : AiMessageBubble(message: messages[index]),
+                      );
+                    },
+                  ),
+                ),
+                SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(24),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.12),
+                              ),
+                            ),
+                            child: TextField(
+                              controller: _controller,
+                              style: const TextStyle(color: Colors.white),
+                              minLines: 1,
+                              maxLines: 5,
+                              textInputAction: TextInputAction.newline,
+                              decoration: const InputDecoration(
+                                hintText: 'Message Yapp AI…',
+                                hintStyle: TextStyle(color: Colors.white54),
+                                border: InputBorder.none,
+                                enabledBorder: InputBorder.none,
+                                focusedBorder: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 10,
+                                ),
+                              ),
+                              onSubmitted: (_) => _send(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Consumer<AiChatProvider>(
+                          builder: (_, provider, _) => IconButton.filled(
+                            icon: provider.isThinking
+                                ? const SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.send, color: Colors.white),
+                            onPressed: _hasText && !provider.isThinking
+                                ? _send
+                                : null,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Consumer<AiChatProvider>(
-                    builder: (_, provider, _) => IconButton.filled(
-                      icon: provider.isThinking
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.send),
-                      onPressed: _hasText && !provider.isThinking
-                          ? _send
-                          : null,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],

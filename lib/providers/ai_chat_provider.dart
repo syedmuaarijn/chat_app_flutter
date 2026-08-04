@@ -96,9 +96,9 @@ class AiChatProvider with ChangeNotifier {
     if (_messages.isNotEmpty) return;
     _messages.add(
       AiMessageModel(
-        id: 'nova-greeting',
+        id: 'yapp-ai-greeting',
         role: AiMessageRole.assistant,
-        content: "Hi, I'm Nova ✨ How can I help today?",
+        content: "Hi, I'm Yapp AI ✨ How can I help today?",
         createdAt: DateTime.now(),
       ),
     );

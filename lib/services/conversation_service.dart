@@ -388,10 +388,12 @@ class ConversationService {
         'conv_id': conversationId,
         'caller_id': currentUser,
       };
-      if (onlyAdminsCanMessage != null)
+      if (onlyAdminsCanMessage != null) {
         params['new_only_admins_can_message'] = onlyAdminsCanMessage;
-      if (onlyAdminsCanEditInfo != null)
+      }
+      if (onlyAdminsCanEditInfo != null) {
         params['new_only_admins_can_edit_info'] = onlyAdminsCanEditInfo;
+      }
 
       await _supabaseClient.rpc('update_group_settings', params: params);
     } catch (e) {

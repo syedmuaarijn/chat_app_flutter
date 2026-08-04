@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chat_app_flutter/services/supabase_auth_service.dart';
 import 'package:chat_app_flutter/services/local_cache_service.dart';
 import 'package:chat_app_flutter/services/offline_service.dart';
@@ -223,10 +224,11 @@ class AuthProvider with ChangeNotifier {
 
     try {
       await _cacheService.clearSession();
+      await _cacheService.clearCache();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
       await _authService.signOut();
       _currentUser = null;
-      // Note: We don't clearCache() here to preserve chat data for offline access
-      // Cache will be managed by age-based cleanup
     } catch (e) {
       _error = e.toString();
     } finally {

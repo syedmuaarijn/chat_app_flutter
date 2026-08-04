@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:intl/intl.dart' show DateFormat;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chat_app_flutter/models/message_model.dart';
 import 'package:chat_app_flutter/providers/chat_provider.dart';
@@ -10,6 +11,7 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:chat_app_flutter/widgets/common/glass_container.dart';
 
 class MessageBubble extends StatefulWidget {
   final MessageModel message;
@@ -45,41 +47,83 @@ class _MessageBubbleState extends State<MessageBubble> {
     final copyableText = _copyableText;
     showModalBottomSheet<void>(
       context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (sheetContext) => SafeArea(
-        child: Wrap(
-          children: [
-            if (copyableText != null)
-              ListTile(
-                leading: const Icon(Icons.copy_outlined),
-                title: const Text('Copy'),
-                onTap: () async {
-                  await Clipboard.setData(ClipboardData(text: copyableText));
-                  if (sheetContext.mounted) Navigator.pop(sheetContext);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Copied to clipboard')),
-                    );
-                  }
-                },
-              ),
-            if (widget.onForward != null)
-              ListTile(
-                leading: const Icon(Icons.forward_outlined),
-                title: const Text('Forward'),
-                onTap: () async {
-                  Navigator.pop(sheetContext);
-                  await widget.onForward!(widget.message);
-                },
-              ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, color: Colors.red),
-              title: const Text('Delete', style: TextStyle(color: Colors.red)),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _showDeleteDialog(context);
-              },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: GlassContainer(
+            padding: const EdgeInsets.fromLTRB(8, 10, 8, 8),
+            borderRadius: BorderRadius.circular(24),
+            child: Wrap(
+              children: [
+                Center(
+                  child: Container(
+                    width: 38,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(
+                        sheetContext,
+                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                if (copyableText != null)
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    leading: Icon(
+                      Icons.copy_outlined,
+                      color: Theme.of(sheetContext).colorScheme.primary,
+                    ),
+                    title: const Text('Copy'),
+                    onTap: () async {
+                      await Clipboard.setData(
+                        ClipboardData(text: copyableText),
+                      );
+                      if (sheetContext.mounted) Navigator.pop(sheetContext);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Copied to clipboard')),
+                        );
+                      }
+                    },
+                  ),
+                if (widget.onForward != null)
+                  ListTile(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    leading: Icon(
+                      Icons.forward_outlined,
+                      color: Theme.of(sheetContext).colorScheme.primary,
+                    ),
+                    title: const Text('Forward'),
+                    onTap: () async {
+                      Navigator.pop(sheetContext);
+                      await widget.onForward!(widget.message);
+                    },
+                  ),
+                ListTile(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  leading: const Icon(Icons.delete_outline, color: Colors.red),
+                  title: const Text(
+                    'Delete',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _showDeleteDialog(context);
+                  },
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -791,7 +835,11 @@ class _MessageBubbleState extends State<MessageBubble> {
       default:
         return Text(
           widget.message.content,
-          style: TextStyle(color: textColor, fontSize: 15),
+          style: TextStyle(
+            color: textColor,
+            fontSize: 15,
+            fontFamily: Platform.isIOS ? null : 'Apple Color Emoji',
+          ),
         );
     }
   }
@@ -806,15 +854,22 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     final isDeleted = widget.message.content == '[This message was deleted]';
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final bubbleColor = widget.isMe
-        ? colorScheme.primary
-        : colorScheme.surfaceContainerHighest;
-    final textColor = widget.isMe
-        ? colorScheme.onPrimary
-        : colorScheme.onSurface;
-    final timeColor = widget.isMe
-        ? colorScheme.onPrimary.withValues(alpha: 0.7)
-        : colorScheme.onSurface.withValues(alpha: 0.5);
+        ? colorScheme.primary.withValues(alpha: 0.25)
+        : (isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.06));
+    final bubbleBorder = Border.all(
+      color: widget.isMe
+          ? colorScheme.primary.withValues(alpha: 0.35)
+          : (isDark
+                ? Colors.white.withValues(alpha: 0.15)
+                : Colors.black.withValues(alpha: 0.12)),
+      width: 1.0,
+    );
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final timeColor = isDark ? Colors.white60 : Colors.black54;
 
     return Align(
       alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -853,6 +908,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 ),
                 decoration: BoxDecoration(
                   color: bubbleColor,
+                  border: bubbleBorder,
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(18),
                     topRight: const Radius.circular(18),
@@ -920,15 +976,8 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   String _timeAgo(DateTime dt) {
     final local = dt.toLocal();
-    final diff = DateTime.now().difference(local);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) {
-      final h = local.hour.toString().padLeft(2, '0');
-      final m = local.minute.toString().padLeft(2, '0');
-      return '$h:$m';
-    }
-    return '${local.day}/${local.month}';
+    final formatter = DateFormat('h:mm a');
+    return formatter.format(local).toLowerCase();
   }
 }
 
@@ -1058,7 +1107,11 @@ class _VoiceMessagePlayerState extends State<_VoiceMessagePlayer>
   Future<void> _ensureSourceLoaded() async {
     if (_player.audioSource != null) return;
     if (widget.url == null || widget.url!.isEmpty) return;
-    if (mounted) setState(() { _isLoading = true; _hasError = false; });
+    if (mounted)
+      setState(() {
+        _isLoading = true;
+        _hasError = false;
+      });
     try {
       final url = widget.url!;
       if (url.startsWith('http')) {
@@ -1184,8 +1237,7 @@ class _VoiceMessagePlayerState extends State<_VoiceMessagePlayer>
                         activeColor: Colors.transparent,
                         inactiveColor: Colors.transparent,
                         thumbColor: widget.foregroundColor,
-                        onChanged:
-                            total.inMilliseconds == 0 ? null : _seekTo,
+                        onChanged: total.inMilliseconds == 0 ? null : _seekTo,
                       ),
                     ),
                   ],
@@ -1229,9 +1281,36 @@ class _WaveformBars extends StatelessWidget {
   });
 
   static const List<double> _seed = [
-    0.30, 0.60, 0.40, 0.90, 0.50, 0.70, 0.30, 0.80, 0.50, 0.40,
-    0.90, 0.60, 0.30, 0.70, 0.50, 0.80, 0.40, 0.60, 0.30, 0.70,
-    0.50, 0.90, 0.40, 0.80, 0.30, 0.60, 0.50, 0.90, 0.40, 0.70,
+    0.30,
+    0.60,
+    0.40,
+    0.90,
+    0.50,
+    0.70,
+    0.30,
+    0.80,
+    0.50,
+    0.40,
+    0.90,
+    0.60,
+    0.30,
+    0.70,
+    0.50,
+    0.80,
+    0.40,
+    0.60,
+    0.30,
+    0.70,
+    0.50,
+    0.90,
+    0.40,
+    0.80,
+    0.30,
+    0.60,
+    0.50,
+    0.90,
+    0.40,
+    0.70,
   ];
 
   @override

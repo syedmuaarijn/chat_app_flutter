@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/models/message_model.dart';
 import 'package:chat_app_flutter/providers/call_provider.dart';
@@ -8,9 +7,14 @@ import 'package:chat_app_flutter/screens/group_info_screen.dart';
 import 'package:chat_app_flutter/screens/contact_info_screen.dart';
 import 'package:chat_app_flutter/widgets/chat/message_bubble.dart';
 import 'package:chat_app_flutter/widgets/chat/message_input_bar.dart';
+import 'package:chat_app_flutter/widgets/chat/date_separator.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import '../widgets/common/avatar_helper.dart';
+import '../widgets/common/abstract_background.dart';
 
 class ChatRoomScreen extends StatefulWidget {
   final String conversationId;
@@ -437,139 +441,222 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
+        backgroundColor: Colors.black.withValues(alpha: 0.2),
+        elevation: 0,
         titleSpacing: 0,
-        title: GestureDetector(
-          onTap: conv.isGroup ? _openGroupInfo : _openContactInfo,
-          child: Row(
-            children: [
-              CircleAvatar(
+        leading: IconButton(
+          icon: const Icon(CupertinoIcons.back, color: Colors.white),
+          tooltip: 'Back',
+          onPressed: () => Navigator.maybePop(context),
+        ),
+        title: Row(
+          children: [
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () {
+                if (conv.displayAvatar.isNotEmpty) {
+                  showDialog(
+                    context: context,
+                    builder: (context) => Dialog(
+                      backgroundColor: Colors.transparent,
+                      child: GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: InteractiveViewer(
+                          child: CachedNetworkImage(
+                            imageUrl: conv.displayAvatar,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: CircleAvatar(
                 radius: 18,
                 backgroundColor: colorScheme.primaryContainer,
                 backgroundImage: conv.displayAvatar.isNotEmpty
-                    ? CachedNetworkImageProvider(conv.displayAvatar)
+                    ? AvatarHelper.getAvatarProvider(conv.displayAvatar)
                     : null,
                 child: conv.displayAvatar.isEmpty
                     ? Text(conv.displayInitial)
                     : null,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  conv.displayName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 17,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                onTap: conv.isGroup ? _openGroupInfo : _openContactInfo,
+                child: Container(
+                  color: Colors.transparent, // To make the whole area tappable
+                  child: Text(
+                    conv.displayName,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                      color: Colors.white,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-            ],
-          ),
-        ),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) async {
-              if (value == 'block') {
-                await _toggleBlock();
-              } else if (value == 'clear') {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('Clear Chat?'),
-                    content: const Text(
-                      'Are you sure you want to clear this chat for you?',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Clear'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirmed == true && mounted) {
-                  await chatProvider.clearChat(widget.conversationId);
-                }
-              }
-            },
-            itemBuilder: (context) => [
-              if (!conv.isGroup)
-                PopupMenuItem(
-                  value: 'block',
-                  child: Text(_isBlockedByMe ? 'Unblock user' : 'Block user'),
-                ),
-              const PopupMenuItem(value: 'clear', child: Text('Clear Chat')),
-            ],
-          ),
-          if (!conv.isGroup) ...[
-            IconButton(
-              icon: const Icon(Icons.videocam_rounded),
-              tooltip: 'Video Call',
-              onPressed: _startVideoCall,
-            ),
-            IconButton(
-              icon: const Icon(Icons.phone_rounded),
-              tooltip: 'Voice Call',
-              onPressed: _startVoiceCall,
             ),
           ],
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: chatProvider.messages.isEmpty
-                ? const Center(child: Text('No messages yet.'))
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    itemCount: chatProvider.messages.length,
-                    itemBuilder: (context, index) {
-                      final message = chatProvider.messages[index];
-                      return MessageBubble(
-                        message: message,
-                        isMe: message.senderId == _currentUserId,
-                        isGroup: conv.isGroup,
-                        onForward: _forwardMessage,
-                      );
-                    },
-                  ),
-          ),
-          if (_isBlockedByMe)
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                'You blocked this user. Unblock them to send messages.',
-                style: TextStyle(fontStyle: FontStyle.italic),
-              ),
-            )
-          else if (canSend)
-            MessageInputBar(
-              controller: _messageController,
-              isSending: _isSending,
-              onSend: _sendMessage,
-              onSendMedia: _sendMediaMessage,
-              onSendVoice: _sendVoiceMessage,
-            )
-          else
-            Container(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                leftGroup
-                    ? 'You left this group'
-                    : 'Only admins can send messages',
-                style: const TextStyle(fontStyle: FontStyle.italic),
+        ),
+        actions: [
+          if (!conv.isGroup) ...[
+            Center(
+              child: IconButton(
+                icon: const Icon(Icons.videocam_rounded, color: Colors.white),
+                tooltip: 'Video Call',
+                onPressed: _startVideoCall,
               ),
             ),
+            Center(
+              child: IconButton(
+                icon: const Icon(Icons.phone_rounded, color: Colors.white),
+                tooltip: 'Voice Call',
+                onPressed: _startVoiceCall,
+              ),
+            ),
+          ],
+          Center(
+            child: PopupMenuButton<String>(
+              iconColor: Colors.white,
+              onSelected: (value) async {
+                if (value == 'block') {
+                  await _toggleBlock();
+                } else if (value == 'clear') {
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('Clear Chat?'),
+                      content: const Text(
+                        'Are you sure you want to clear this chat for you?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Clear'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirmed == true && mounted) {
+                    await chatProvider.clearChat(widget.conversationId);
+                  }
+                }
+              },
+              itemBuilder: (context) => [
+                if (!conv.isGroup)
+                  PopupMenuItem(
+                    value: 'block',
+                    child: Text(_isBlockedByMe ? 'Unblock user' : 'Block user'),
+                  ),
+                const PopupMenuItem(value: 'clear', child: Text('Clear Chat')),
+              ],
+            ),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          const AbstractBackground(),
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: chatProvider.messages.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'No messages yet.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          itemCount: chatProvider.messages.length,
+                          itemBuilder: (context, index) {
+                            final message = chatProvider.messages[index];
+                            final previousMessage = index > 0
+                                ? chatProvider.messages[index - 1]
+                                : null;
+                            bool showDate = false;
+
+                            if (previousMessage == null) {
+                              showDate = true;
+                            } else {
+                              final currentLocal = message.createdAt.toLocal();
+                              final prevLocal = previousMessage.createdAt
+                                  .toLocal();
+                              if (currentLocal.year != prevLocal.year ||
+                                  currentLocal.month != prevLocal.month ||
+                                  currentLocal.day != prevLocal.day) {
+                                showDate = true;
+                              }
+                            }
+
+                            return Column(
+                              children: [
+                                if (showDate)
+                                  DateSeparator(date: message.createdAt),
+                                MessageBubble(
+                                  message: message,
+                                  isMe: message.senderId == _currentUserId,
+                                  isGroup: conv.isGroup,
+                                  onForward: _forwardMessage,
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                ),
+                if (_isBlockedByMe)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      'You blocked this user. Unblock them to send messages.',
+                      style: TextStyle(
+                        fontStyle: FontStyle.italic,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  )
+                else if (canSend)
+                  MessageInputBar(
+                    controller: _messageController,
+                    isSending: _isSending,
+                    onSend: _sendMessage,
+                    onSendMedia: _sendMediaMessage,
+                    onSendVoice: _sendVoiceMessage,
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      leftGroup
+                          ? 'You left this group'
+                          : 'Only admins can send messages',
+                      style: const TextStyle(
+                        fontStyle: FontStyle.italic,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );

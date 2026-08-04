@@ -1,8 +1,8 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:chat_app_flutter/models/conversation_model.dart';
 import 'package:chat_app_flutter/models/message_model.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../common/avatar_helper.dart';
 
 class ConversationTile extends StatelessWidget {
   final ConversationModel conversation;
@@ -16,93 +16,141 @@ class ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final conv = conversation;
     final lastMsg = conv.lastMessage;
     final unread = conv.unreadCount;
 
-    // Determine if the last message was sent by the current user so we can
-    // show WhatsApp-style tick icons (sent / delivered / read).
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
     final isLastMsgMine =
-        lastMsg != null && lastMsg.senderId == currentUserId && !lastMsg.isSystemMessage;
+        lastMsg != null &&
+        lastMsg.senderId == currentUserId &&
+        !lastMsg.isSystemMessage;
 
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      leading: CircleAvatar(
-        radius: 26,
-        backgroundColor: colorScheme.primaryContainer,
-        backgroundImage: conv.displayAvatar.isNotEmpty
-            ? CachedNetworkImageProvider(conv.displayAvatar)
-            : null,
-        child: conv.displayAvatar.isEmpty
-            ? Icon(
-                conv.isGroup ? Icons.group : Icons.person,
-                color: colorScheme.onPrimaryContainer,
-                size: 26,
-              )
-            : null,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.surface.withValues(alpha: 0.32),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outline.withValues(alpha: 0.18),
+          width: 1,
+        ),
       ),
-      title: Text(
-        conv.displayName,
-        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
-      subtitle: Row(
-        children: [
-          // Tick icon prefix when the last message is from the current user
-          if (isLastMsgMine) ...[
-            _TickIcon(status: lastMsg.status, colorScheme: colorScheme),
-            const SizedBox(width: 4),
-          ],
-          if (lastMsg != null && !lastMsg.isSystemMessage) ...[
-            Flexible(
-              child: Text(
-                lastMsg.content,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: unread > 0
-                      ? colorScheme.onSurface
-                      : colorScheme.onSurface.withValues(alpha: 0.55),
-                  fontWeight: unread > 0 ? FontWeight.w500 : FontWeight.normal,
-                  fontSize: 13,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: colorScheme.primary.withValues(alpha: 0.2),
+                  backgroundImage: conv.displayAvatar.isNotEmpty
+                      ? AvatarHelper.getAvatarProvider(conv.displayAvatar)
+                      : null,
+                  child: conv.displayAvatar.isEmpty
+                      ? Icon(
+                          conv.isGroup ? Icons.group : Icons.person,
+                          color: colorScheme.primary,
+                          size: 26,
+                        )
+                      : null,
                 ),
-              ),
-            ),
-          ] else if (lastMsg != null && lastMsg.isSystemMessage) ...[
-            Icon(Icons.info_outline,
-                size: 14, color: colorScheme.onSurface.withValues(alpha: 0.4)),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                lastMsg.content,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: colorScheme.onSurface.withValues(alpha: 0.55),
-                  fontStyle: FontStyle.italic,
-                  fontSize: 13,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        conv.displayName,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                          color: colorScheme.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          if (isLastMsgMine) ...[
+                            _TickIcon(
+                              status: lastMsg.status,
+                              colorScheme: colorScheme,
+                            ),
+                            const SizedBox(width: 4),
+                          ],
+                          if (lastMsg != null && !lastMsg.isSystemMessage) ...[
+                            Flexible(
+                              child: Text(
+                                lastMsg.content,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: unread > 0
+                                      ? colorScheme.onSurface
+                                      : colorScheme.onSurfaceVariant,
+                                  fontWeight: unread > 0
+                                      ? FontWeight.w500
+                                      : FontWeight.normal,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ] else if (lastMsg != null &&
+                              lastMsg.isSystemMessage) ...[
+                            Icon(
+                              Icons.info_outline,
+                              size: 14,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                lastMsg.content,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontStyle: FontStyle.italic,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ] else
+                            Text(
+                              'No messages yet',
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                                fontSize: 13,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                _buildTrailing(colorScheme, lastMsg, unread),
+              ],
             ),
-          ] else
-            Text(
-              'No messages yet',
-              style: TextStyle(
-                color: colorScheme.onSurface.withValues(alpha: 0.4),
-                fontSize: 13,
-              ),
-            ),
-        ],
+          ),
+        ),
       ),
-      trailing: _buildTrailing(colorScheme, lastMsg, unread),
-      onTap: onTap,
     );
   }
 
-  Widget _buildTrailing(ColorScheme colorScheme, MessageModel? lastMsg, int unread) {
+  Widget _buildTrailing(
+    ColorScheme colorScheme,
+    MessageModel? lastMsg,
+    int unread,
+  ) {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -114,21 +162,21 @@ class ConversationTile extends StatelessWidget {
               fontSize: 11,
               color: unread > 0
                   ? colorScheme.primary
-                  : colorScheme.onSurface.withValues(alpha: 0.45),
+                  : colorScheme.onSurfaceVariant,
             ),
           ),
         if (unread > 0) ...[
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Container(
-            padding: const EdgeInsets.all(5),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
               color: colorScheme.primary,
-              shape: BoxShape.circle,
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               unread > 99 ? '99+' : '$unread',
-              style: TextStyle(
-                color: colorScheme.onPrimary,
+              style: const TextStyle(
+                color: Colors.white,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
               ),
@@ -171,25 +219,20 @@ class _TickIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (status) {
       case MessageStatus.sending:
-        return SizedBox(
+        return const SizedBox(
           width: 12,
           height: 12,
           child: CircularProgressIndicator(
             strokeWidth: 1.5,
-            color: colorScheme.onSurface.withValues(alpha: 0.45),
+            color: Colors.white54,
           ),
         );
       case MessageStatus.sent:
-        // Single grey tick — message is in the server but not yet delivered.
-        return Icon(Icons.check, size: 14,
-            color: colorScheme.onSurface.withValues(alpha: 0.55));
+        return const Icon(Icons.check, size: 14, color: Colors.white54);
       case MessageStatus.delivered:
-        // Double grey tick — delivered to recipient's device.
-        return Icon(Icons.done_all, size: 14,
-            color: colorScheme.onSurface.withValues(alpha: 0.55));
+        return const Icon(Icons.done_all, size: 14, color: Colors.white54);
       case MessageStatus.read:
-        // Double BLUE tick — recipient has read the message.
-        return const Icon(Icons.done_all, size: 14, color: Color(0xFF53BDEB));
+        return Icon(Icons.done_all, size: 14, color: colorScheme.primary);
     }
   }
 }
