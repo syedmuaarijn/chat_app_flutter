@@ -57,6 +57,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.white70 : Colors.black54;
+    final iconColor = isDark ? Colors.white70 : Colors.black54;
+    final borderColor = isDark ? Colors.white24 : Colors.black26;
+    final backButtonColor = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -64,7 +70,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(CupertinoIcons.back, color: Colors.white),
+          icon: Icon(CupertinoIcons.back, color: backButtonColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -101,7 +107,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         textAlign: TextAlign.center,
                         style: theme.textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -109,7 +115,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         "Enter your email and we'll send you a reset link.",
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.white70,
+                          color: subtextColor,
                         ),
                       ),
                       const SizedBox(height: 40),
@@ -123,18 +129,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                               keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.done,
                               onFieldSubmitted: (_) => _handleResetPassword(),
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: 'Email',
-                                labelStyle: const TextStyle(
-                                  color: Colors.white70,
+                                labelStyle: TextStyle(
+                                  color: subtextColor,
                                 ),
-                                prefixIcon: const Icon(
+                                prefixIcon: Icon(
                                   Icons.email_outlined,
-                                  color: Colors.white70,
+                                  color: iconColor,
                                 ),
-                                enabledBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white24),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: borderColor),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: accent),
@@ -163,13 +169,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             const SizedBox(height: 24),
                             TextButton.icon(
                               onPressed: () => Navigator.pop(context),
-                              icon: const Icon(
+                              icon: Icon(
                                 CupertinoIcons.back,
-                                color: Colors.white70,
+                                color: subtextColor,
                               ),
-                              label: const Text(
+                              label: Text(
                                 'Back to Login',
-                                style: TextStyle(color: Colors.white70),
+                                style: TextStyle(color: subtextColor),
                               ),
                             ),
                           ],

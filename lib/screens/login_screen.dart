@@ -56,6 +56,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.white70 : Colors.black54;
+    final iconColor = isDark ? Colors.white70 : Colors.black54;
+    final borderColor = isDark ? Colors.white24 : Colors.black26;
 
     return Scaffold(
       body: Stack(
@@ -89,7 +94,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         textAlign: TextAlign.center,
                         style: theme.textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -97,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         'Sign in to continue',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.white70,
+                          color: subtextColor,
                         ),
                       ),
                       const SizedBox(height: 40),
@@ -113,13 +118,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.next,
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: 'Email',
-                                labelStyle: const TextStyle(color: Colors.white70),
-                                prefixIcon: const Icon(Icons.email_outlined, color: Colors.white70),
+                                labelStyle: TextStyle(color: subtextColor),
+                                prefixIcon: Icon(Icons.email_outlined, color: iconColor),
                                 enabledBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white24),
+                                  borderSide: BorderSide(color: borderColor),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: accent),
@@ -143,13 +148,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               obscureText: _obscurePassword,
                               textInputAction: TextInputAction.done,
                               onFieldSubmitted: (_) => _handleSignIn(),
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: 'Password',
-                                labelStyle: const TextStyle(color: Colors.white70),
-                                prefixIcon: const Icon(Icons.lock_outline, color: Colors.white70),
-                                enabledBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white24),
+                                labelStyle: TextStyle(color: subtextColor),
+                                prefixIcon: Icon(Icons.lock_outline, color: iconColor),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: borderColor),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: accent),
@@ -159,7 +164,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     _obscurePassword
                                         ? Icons.visibility_outlined
                                         : Icons.visibility_off_outlined,
-                                    color: Colors.white70,
+                                    color: iconColor,
                                   ),
                                   onPressed: () {
                                     setState(() {
@@ -209,9 +214,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Text(
+                                Text(
                                   "Don't have an account?",
-                                  style: TextStyle(color: Colors.white70),
+                                  style: TextStyle(color: subtextColor),
                                 ),
                                 TextButton(
                                   onPressed: () {

@@ -58,6 +58,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.white70 : Colors.black54;
+    final iconColor = isDark ? Colors.white70 : Colors.black54;
+    final borderColor = isDark ? Colors.white24 : Colors.black26;
+    final backButtonColor = isDark ? Colors.white : Colors.black87;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -65,7 +71,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(CupertinoIcons.back, color: Colors.white),
+          icon: Icon(CupertinoIcons.back, color: backButtonColor),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -102,7 +108,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         textAlign: TextAlign.center,
                         style: theme.textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -110,7 +116,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         "Enter your new password below.",
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.white70,
+                          color: subtextColor,
                         ),
                       ),
                       const SizedBox(height: 40),
@@ -122,18 +128,18 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             TextFormField(
                               controller: _passwordController,
                               obscureText: obscure1,
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: 'New Password',
-                                labelStyle: const TextStyle(
-                                  color: Colors.white70,
+                                labelStyle: TextStyle(
+                                  color: subtextColor,
                                 ),
-                                prefixIcon: const Icon(
+                                prefixIcon: Icon(
                                   Icons.lock_outline,
-                                  color: Colors.white70,
+                                  color: iconColor,
                                 ),
-                                enabledBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white24),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: borderColor),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: accent),
@@ -143,7 +149,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                     obscure1
                                         ? Icons.visibility_outlined
                                         : Icons.visibility_off_outlined,
-                                    color: Colors.white70,
+                                    color: iconColor,
                                   ),
                                   onPressed: () =>
                                       setState(() => obscure1 = !obscure1),
@@ -161,18 +167,18 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                             TextFormField(
                               controller: _confirmController,
                               obscureText: obscure2,
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: 'Confirm Password',
-                                labelStyle: const TextStyle(
-                                  color: Colors.white70,
+                                labelStyle: TextStyle(
+                                  color: subtextColor,
                                 ),
-                                prefixIcon: const Icon(
+                                prefixIcon: Icon(
                                   Icons.lock_outline,
-                                  color: Colors.white70,
+                                  color: iconColor,
                                 ),
-                                enabledBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white24),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: borderColor),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: accent),
@@ -182,7 +188,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                     obscure2
                                         ? Icons.visibility_outlined
                                         : Icons.visibility_off_outlined,
-                                    color: Colors.white70,
+                                    color: iconColor,
                                   ),
                                   onPressed: () =>
                                       setState(() => obscure2 = !obscure2),
@@ -207,13 +213,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 context,
                                 '/login',
                               ),
-                              icon: const Icon(
+                              icon: Icon(
                                 Icons.close_rounded,
-                                color: Colors.white70,
+                                color: subtextColor,
                               ),
-                              label: const Text(
+                              label: Text(
                                 'Cancel',
-                                style: TextStyle(color: Colors.white70),
+                                style: TextStyle(color: subtextColor),
                               ),
                             ),
                           ],

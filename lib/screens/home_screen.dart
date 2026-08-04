@@ -222,9 +222,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             bottom: false,
             child: Column(
               children: [
-                GlassAppBar(
-                  title: 'Yapp',
-                  onAvatarTap: _openProfileSettings,
+                Padding(
+                  padding: EdgeInsetsGeometry.symmetric(horizontal: 7),
+                  child: GlassAppBar(
+                    title: 'Yapp',
+                    onAvatarTap: _openProfileSettings,
+                  ),
                 ),
                 if (_tabController.index == 0 || _tabController.index == 1)
                   GlassSearchBar(

@@ -5,7 +5,6 @@ import 'package:chat_app_flutter/widgets/common/neon_button.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cupertino_native/cupertino_native.dart';
 import '../widgets/common/glass_container.dart';
 
 class SettingsScreen extends StatelessWidget {

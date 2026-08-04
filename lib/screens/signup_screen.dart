@@ -62,6 +62,11 @@ class _SignupScreenState extends State<SignupScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.white70 : Colors.black54;
+    final iconColor = isDark ? Colors.white70 : Colors.black54;
+    final borderColor = isDark ? Colors.white24 : Colors.black26;
 
     return Scaffold(
       body: Stack(
@@ -95,7 +100,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         textAlign: TextAlign.center,
                         style: theme.textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: textColor,
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -103,7 +108,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         'Sign up to get started',
                         textAlign: TextAlign.center,
                         style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.white70,
+                          color: subtextColor,
                         ),
                       ),
                       const SizedBox(height: 40),
@@ -118,13 +123,13 @@ class _SignupScreenState extends State<SignupScreen> {
                             TextFormField(
                               controller: _usernameController,
                               textInputAction: TextInputAction.next,
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: 'Username',
-                                labelStyle: const TextStyle(color: Colors.white70),
-                                prefixIcon: const Icon(Icons.person_outline, color: Colors.white70),
-                                enabledBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white24),
+                                labelStyle: TextStyle(color: subtextColor),
+                                prefixIcon: Icon(Icons.person_outline, color: iconColor),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: borderColor),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: accent),
@@ -147,13 +152,13 @@ class _SignupScreenState extends State<SignupScreen> {
                               controller: _emailController,
                               keyboardType: TextInputType.emailAddress,
                               textInputAction: TextInputAction.next,
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: 'Email',
-                                labelStyle: const TextStyle(color: Colors.white70),
-                                prefixIcon: const Icon(Icons.email_outlined, color: Colors.white70),
-                                enabledBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white24),
+                                labelStyle: TextStyle(color: subtextColor),
+                                prefixIcon: Icon(Icons.email_outlined, color: iconColor),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: borderColor),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: accent),
@@ -176,13 +181,13 @@ class _SignupScreenState extends State<SignupScreen> {
                               controller: _passwordController,
                               obscureText: _obscurePassword,
                               textInputAction: TextInputAction.next,
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: 'Password',
-                                labelStyle: const TextStyle(color: Colors.white70),
-                                prefixIcon: const Icon(Icons.lock_outline, color: Colors.white70),
-                                enabledBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white24),
+                                labelStyle: TextStyle(color: subtextColor),
+                                prefixIcon: Icon(Icons.lock_outline, color: iconColor),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: borderColor),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: accent),
@@ -192,7 +197,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                     _obscurePassword
                                         ? Icons.visibility_outlined
                                         : Icons.visibility_off_outlined,
-                                    color: Colors.white70,
+                                    color: iconColor,
                                   ),
                                   onPressed: () {
                                     setState(() {
@@ -219,13 +224,13 @@ class _SignupScreenState extends State<SignupScreen> {
                               obscureText: _obscureConfirmPassword,
                               textInputAction: TextInputAction.done,
                               onFieldSubmitted: (_) => _handleSignUp(),
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: 'Confirm Password',
-                                labelStyle: const TextStyle(color: Colors.white70),
-                                prefixIcon: const Icon(Icons.lock_outline, color: Colors.white70),
-                                enabledBorder: const UnderlineInputBorder(
-                                  borderSide: BorderSide(color: Colors.white24),
+                                labelStyle: TextStyle(color: subtextColor),
+                                prefixIcon: Icon(Icons.lock_outline, color: iconColor),
+                                enabledBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(color: borderColor),
                                 ),
                                 focusedBorder: UnderlineInputBorder(
                                   borderSide: BorderSide(color: accent),
@@ -235,7 +240,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                     _obscureConfirmPassword
                                         ? Icons.visibility_outlined
                                         : Icons.visibility_off_outlined,
-                                    color: Colors.white70,
+                                    color: iconColor,
                                   ),
                                   onPressed: () {
                                     setState(() {
@@ -274,9 +279,9 @@ class _SignupScreenState extends State<SignupScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Text(
+                                Text(
                                   'Already have an account?',
-                                  style: TextStyle(color: Colors.white70),
+                                  style: TextStyle(color: subtextColor),
                                 ),
                                 TextButton(
                                   onPressed: () {

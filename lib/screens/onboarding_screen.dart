@@ -32,6 +32,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final accent = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+    final subtextColor = isDark ? Colors.white70 : Colors.black54;
 
     return Scaffold(
       body: Stack(
@@ -64,14 +67,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               children: [
                 GestureDetector(
                   onTap: () => _controller.jumpToPage(2),
-                  child: Text('Skip', style: theme.textTheme.bodyLarge?.copyWith(color: Colors.white70)),
+                  child: Text('Skip', style: theme.textTheme.bodyLarge?.copyWith(color: subtextColor)),
                 ),
                 SmoothPageIndicator(
                   controller: _controller,
                   count: 3,
                   effect: ExpandingDotsEffect(
                     activeDotColor: accent,
-                    dotColor: Colors.white24,
+                    dotColor: isDark ? Colors.white24 : Colors.black26,
                     dotHeight: 8,
                     dotWidth: 8,
                   ),
@@ -90,7 +93,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       )
                     : GestureDetector(
                         onTap: () => _controller.nextPage(duration: const Duration(milliseconds: 500), curve: Curves.easeInOut),
-                        child: Text('Next', style: theme.textTheme.bodyLarge?.copyWith(color: Colors.white, fontWeight: FontWeight.bold)),
+                        child: Text('Next', style: theme.textTheme.bodyLarge?.copyWith(color: textColor, fontWeight: FontWeight.bold)),
                       ),
               ],
             ),
@@ -102,6 +105,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   Widget _buildPage({required String subtitle, required Widget visual}) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final subtextColor = isDark ? Colors.white70 : Colors.black54;
+
     return Padding(
       padding: const EdgeInsets.all(40),
       child: Column(
@@ -117,7 +123,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           Text(
             subtitle,
             style: theme.textTheme.bodyLarge?.copyWith(
-              color: Colors.white70,
+              color: subtextColor,
               fontSize: 18,
             ),
             textAlign: TextAlign.center,
