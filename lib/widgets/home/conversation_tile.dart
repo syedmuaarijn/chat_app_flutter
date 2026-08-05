@@ -29,7 +29,7 @@ class ConversationTile extends StatelessWidget {
         !lastMsg.isSystemMessage;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
       decoration: BoxDecoration(
         color: colorScheme.surface.withValues(alpha: 0.32),
         borderRadius: BorderRadius.circular(16),

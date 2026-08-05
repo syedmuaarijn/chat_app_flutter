@@ -37,9 +37,7 @@ dependencies:
   passwordfield: ^0.2.0
   email_textfield: ^0.0.1
   email_validator: ^3.0.0
-  # firebase_core: ^4.11.0
-  # firebase_auth: ^6.5.4
-  supabase_flutter: ^2.15.2
+  supabase_flutter: ^2.17.1
   provider: ^6.1.5+1
   cached_network_image: ^3.4.1
   intl: ^0.20.3
@@ -58,7 +56,7 @@ dependencies:
   http: ^1.3.0
   crypto: ^3.0.3
   open_filex: ^4.3.0
-  record: ^6.1.2
+  record: ^7.1.1
   just_audio: ^0.10.5
   agora_rtc_engine: 6.5.3
   flutter_ringtone_player: ^4.0.0+4
@@ -98,6 +96,7 @@ flutter:
     - assets/animations/
     - assets/yapp_ai_avatar.png
     - assets/yapp-logo.png
+    - assets/yapp-logo-light-mode.png
     - assets/yapp_ai_full.png
     - assets/yapp-app-icon.png
     - assets/light-mode-bg.png

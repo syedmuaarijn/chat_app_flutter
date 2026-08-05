@@ -10,7 +10,7 @@ const corsHeaders = {
 const geminiUrl =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:streamGenerateContent?alt=sse";
 
-const systemInstruction = `You are Nova, a friendly and helpful AI assistant built into a chat app.
+const systemInstruction = `You are Yapp, a friendly and helpful AI assistant built into a chat app.
 Be warm, concise, and conversational. Help with questions, ideas, writing, math, coding, and everyday tasks.
 Use short paragraphs and natural language suited to a mobile chat. Never claim to be human.`;
 
@@ -117,7 +117,7 @@ serve(async (req) => {
           }
 
           reply = reply.trim();
-          if (!reply) throw new Error("Nova returned an empty reply.");
+          if (!reply) throw new Error("Yapp returned an empty reply.");
           const { error: saveError } = await supabase.from("ai_messages").insert([
             { user_id: user.id, role: "user", content: message },
             { user_id: user.id, role: "assistant", content: reply },
@@ -125,8 +125,8 @@ serve(async (req) => {
           if (saveError) throw saveError;
           controller.enqueue(encoder.encode("event: done\ndata: {}\n\n"));
         } catch (error) {
-          console.error("Nova streaming failed", error);
-          controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ error: "Nova could not finish that response. Please try again." })}\n\n`));
+          console.error("Yapp streaming failed", error);
+          controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ error: "Yapp could not finish that response. Please try again." })}\n\n`));
         } finally {
           reader.releaseLock();
           controller.close();

@@ -436,7 +436,7 @@ class _GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
             iconTheme:
                 IconThemeData(color: theme.colorScheme.primary),
-            actions: [if (action != null) action!],
+            actions: [?action],
           ),
         ),
       ),

@@ -89,8 +89,8 @@ class AgoraCallService {
         scenario: AudioScenarioType.audioScenarioChatroom,
       );
 
-      // 6. Default audio route to earpiece (user can toggle to speaker via button)
-      await _engine!.setDefaultAudioRouteToSpeakerphone(false);
+      // 6. Default audio route to speakerphone for better call experience
+      await _engine!.setDefaultAudioRouteToSpeakerphone(true);
 
       if (mode == CallMode.video) {
         await _engine!.enableVideo();

@@ -35,9 +35,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    _tabController.addListener(_onTabChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _load();
     });
+  }
+
+  void _onTabChanged() {
+    // Rebuild whenever the tab index settles on a new tab so that
+    // the search bar and FABs show/hide correctly.
+    if (!_tabController.indexIsChanging) {
+      setState(() {});
+    }
   }
 
   void _load() {
@@ -51,6 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   void dispose() {
     context.read<ChatProvider>().stopListeningToConversations();
     context.read<CallProvider>().stopListeningToCallSignals();
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
   }

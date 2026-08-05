@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 class ThemeProvider with ChangeNotifier {
   static const String _themeKey = 'theme_preference';
 
-  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode _themeMode = ThemeMode.dark; // Default to dark theme
   final Color _accentColor = const Color(0xFFC0E000); // Yellowish Green
   final Color _backgroundBaseColor = const Color(0xFF0F1A12); // Very dark green/black
 
@@ -24,9 +24,9 @@ class ThemeProvider with ChangeNotifier {
       final themeIndex = prefs.getInt(_themeKey);
       if (themeIndex != null) {
         _themeMode = ThemeMode.values[themeIndex];
+        notifyListeners();
       }
-
-      notifyListeners();
+      // If no saved preference, keep default (dark)
     } catch (e) {
       debugPrint('Error loading theme settings: $e');
     }

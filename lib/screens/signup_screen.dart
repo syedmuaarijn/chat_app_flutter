@@ -82,18 +82,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // Header
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: accent.withValues(alpha: 0.1),
-                        ),
-                        child: Icon(
-                          Icons.person_add_rounded,
-                          size: 48,
-                          color: accent,
-                        ),
-                      ),
+                      Image.asset('assets/yapp-logo.png', height: 54),
                       const SizedBox(height: 24),
                       Text(
                         'Create Account',

@@ -1107,11 +1107,12 @@ class _VoiceMessagePlayerState extends State<_VoiceMessagePlayer>
   Future<void> _ensureSourceLoaded() async {
     if (_player.audioSource != null) return;
     if (widget.url == null || widget.url!.isEmpty) return;
-    if (mounted)
+    if (mounted) {
       setState(() {
         _isLoading = true;
         _hasError = false;
       });
+    }
     try {
       final url = widget.url!;
       if (url.startsWith('http')) {

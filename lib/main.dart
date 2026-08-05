@@ -35,7 +35,7 @@ void main() async {
 
   await Supabase.initialize(
     url: SupabaseConfig.supabaseUrl,
-    publishableKey: SupabaseConfig.supabasePublishableKey,
+    anonKey: SupabaseConfig.supabasePublishableKey,
   );
   runApp(
     LiquidGlassWidgets.wrap(

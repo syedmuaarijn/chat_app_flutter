@@ -156,10 +156,12 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                                 ),
                               ),
                               validator: (value) {
-                                if (value == null || value.isEmpty)
+                                if (value == null || value.isEmpty) {
                                   return 'Enter password';
-                                if (value.length < 8)
+                                }
+                                if (value.length < 8) {
                                   return 'Minimum 8 characters';
+                                }
                                 return null;
                               },
                             ),

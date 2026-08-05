@@ -745,22 +745,25 @@ class CallProvider with ChangeNotifier {
   // ── Ringtone ───────────────────────────────────────────────────────────────
   Future<void> _playRingtone({required bool outgoing}) async {
     _stopRingtone();
-    void playAlert() {
-      if (_status == CallStatus.ringing) {
-        if (outgoing) {
+
+    if (outgoing) {
+      // Outgoing: repeat a short system alert every 2 seconds
+      void playAlert() {
+        if (_status == CallStatus.ringing) {
           SystemSound.play(SystemSoundType.alert);
         } else {
-          FlutterRingtonePlayer().playRingtone(looping: false, asAlarm: false);
+          _stopRingtone();
         }
-      } else {
-        _stopRingtone();
       }
-    }
 
-    playAlert();
-    _ringtoneTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       playAlert();
-    });
+      _ringtoneTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+        playAlert();
+      });
+    } else {
+      // Incoming: play the device ringtone with native looping — no timer needed
+      FlutterRingtonePlayer().playRingtone(looping: true, asAlarm: false);
+    }
   }
 
   void _stopRingtone() {

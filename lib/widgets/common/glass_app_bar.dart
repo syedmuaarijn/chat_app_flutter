@@ -34,7 +34,12 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               if (title == 'Yapp')
-                Image.asset('assets/yapp-logo.png', height: 42)
+                Image.asset(
+                  Theme.of(context).brightness == Brightness.light
+                      ? 'assets/yapp-logo-light-mode.png'
+                      : 'assets/yapp-logo.png',
+                  height: 42,
+                )
               else
                 Text(
                   title,
